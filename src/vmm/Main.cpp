@@ -1,5 +1,5 @@
 #include <ntddk.h>
-#include "Common.h"
+#include "Common.hpp"
 
 void DriverUnload(PDRIVER_OBJECT pDriver)
 {

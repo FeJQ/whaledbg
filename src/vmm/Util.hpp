@@ -3,9 +3,6 @@
 class Util
 {
 public:
-
-
-
 	/**
 	 * 在每个处理器上执行routine
 	 *
@@ -16,10 +13,12 @@ public:
 	 */
 	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)(void* arg1, void* arg2), void* context1, void* context2)
 	{
-		for (ULONG i = 0; i < CPU_COUNT; i++)
+		NTSTATUS status = STATUS_SUCCESS;
+		ULONG processorCount = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+		for (ULONG i = 0; i < processorCount; i++)
 		{
 			PROCESSOR_NUMBER processorNumber = { 0 };
-			NTSTATUS status = KeGetProcessorNumberFromIndex(i, &processorNumber);
+			status = KeGetProcessorNumberFromIndex(i, &processorNumber);
 			if (!NT_SUCCESS(status))
 			{
 				return status;
