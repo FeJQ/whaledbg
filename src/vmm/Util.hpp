@@ -11,7 +11,7 @@ public:
 	 * @param context2: 参数2
 	 * @return NTSTATUS: 状态码
 	 */
-	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)(void* arg1, void* arg2), void* context1, void* context2)
+	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)(void* arg1, void* arg2), void* context1 = nullptr, void* context2 = nullptr)
 	{
 		NTSTATUS status = STATUS_SUCCESS;
 		ULONG processorCount = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
@@ -41,6 +41,53 @@ public:
 		}
 		return STATUS_SUCCESS;
 	}
+
+	/**
+	 * 申请非分页内存
+	 *
+	 * @param size:大小
+	 * @return PVOID:
+	 */
+	static PVOID alloc(ULONG_PTR size)
+	{
+		PHYSICAL_ADDRESS p = { -1 };
+		return MmAllocateContiguousMemory(size, p);
+	}
+
+	/**
+	 * 释放非分页内存
+	 *
+	 * @param p:
+	 * @return void:
+	 */
+	static void free(PVOID p)
+	{
+		MmFreeContiguousMemory(p);
+	}
+
+	/**
+	 * 获取CPU核心数量
+	 *
+	 * @return ULONG:
+	 */
+	static ULONG getCpuCount()
+	{
+		return KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+	}
+
+	/**
+	 * 物理地址转虚拟地址
+	 *
+	 * @param pa:物理地址
+	 * @return void*:
+	 */
+	static void* paToVa(ULONG64 pa)
+	{
+		PHYSICAL_ADDRESS paddr = { 0 };
+		paddr.QuadPart = pa;
+		return MmGetVirtualForPhysical(paddr);
+	}
+
 
 
 

@@ -68,13 +68,21 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="Util.cpp" />
-    <ClCompile Include="VmxManager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Common.h" />
-    <ClInclude Include="Util.h" />
-    <ClInclude Include="VmxManager.h" />
+    <CustomBuild Include="asm64..asm">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ml64 /c %(filename).asm</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(SolutionDir)build\$(TargetName)\temp\$(ConfigurationName)\%(filename).obj;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(SolutionDir)build\$(TargetName)\temp\$(ConfigurationName)\%(filename).obj;%(Outputs)</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ml64 /c %(filename).asm</Command>
+    </CustomBuild>
+    <ClInclude Include="asm.h" />
+    <ClInclude Include="Common.hpp" />
+    <ClInclude Include="IA32.h" />
+    <ClInclude Include="SvmManager.h" />
+    <ClInclude Include="Util.hpp" />
+    <ClInclude Include="VmxManager.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
