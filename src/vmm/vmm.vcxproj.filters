@@ -47,10 +47,13 @@
     <ClInclude Include="asm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Ept.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="asm64..asm">
+    <MASM Include="asm64..asm">
       <Filter>Header Files</Filter>
-    </CustomBuild>
+    </MASM>
   </ItemGroup>
 </Project>

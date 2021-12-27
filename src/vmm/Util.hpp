@@ -50,7 +50,7 @@ public:
 	 */
 	static PVOID alloc(ULONG_PTR size)
 	{
-		PHYSICAL_ADDRESS p = { -1 };
+		PHYSICAL_ADDRESS p = { 0 };
 		return MmAllocateContiguousMemory(size, p);
 	}
 
@@ -76,6 +76,28 @@ public:
 	}
 
 	/**
+	 * 获取当前cpu索引
+	 *
+	 * @return ULONG:
+	 */
+	static ULONG currentCpuIndex()
+	{
+		return KeGetCurrentProcessorNumberEx(NULL);
+	}
+
+	/**
+	 * 虚拟地址转物理地址
+	 *
+	 * @param void * virtualAddress:
+	 * @return ULONG_PTR:
+	 */
+	static ULONG_PTR vaToPa(void* virtualAddress)
+	{
+		PHYSICAL_ADDRESS pa = MmGetPhysicalAddress(virtualAddress);
+		return pa.QuadPart;
+	}
+
+	/**
 	 * 物理地址转虚拟地址
 	 *
 	 * @param pa:物理地址
@@ -88,6 +110,19 @@ public:
 		return MmGetVirtualForPhysical(paddr);
 	}
 
+	/**
+	 * 检查平台架构是否为x64
+	 *
+	 * @return bool:
+	 */
+	static bool checkAmd64()
+	{
+#ifdef AMD64
+		return true;
+#else
+		return false;
+#endif // AMD64
+	}
 
 
 

@@ -8,7 +8,7 @@ Export void DriverUnload(PDRIVER_OBJECT pDriver)
 {
 	NTSTATUS status;
 	DbgLog("驱动已卸载", 0);
-	status = VmStopVmx();
+	status = vmxManager->stop();
 	if (!NT_SUCCESS(status))
 	{
 		Common::log(Common::LogLevel::Error, "Enable vmx failed.");
@@ -30,7 +30,7 @@ Export NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 	{
 		KdPrint(("VMX初始化失败"));
 	}
-	status = VmStartVmx();
+	//status = VmStartVmx();
 
 	if (!NT_SUCCESS(status))
 	{

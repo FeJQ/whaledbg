@@ -1,10 +1,17 @@
 #pragma once
 #include "Common.hpp"
+#include "IA32.h"
 
 EXTERN_C_BEGIN
 
-EXTERN_C  PVOID __stdcall __getPebAddress();
+enum VmcallReason
+{
+	VmcallVmxOff = 54886475,
+	VmcallLstarHookEnable,
+	VmcallLstarHookDisable,
+};
 
+EXTERN_C  PVOID __stdcall __getPebAddress();
 EXTERN_C inline void __stdcall __devideByZero();
 
 ASM ULONG64 __readcs();
@@ -25,7 +32,25 @@ ASM void __lgdt(void* gdtr);
 ASM void __pushall();
 ASM void __popall();
 
+ASM NTSTATUS __stdcall __vmlaunch(void* arg1, void* arg2);
+
 ASM void __svreg(Registers64* reg);
 ASM void __ldreg(Registers64* reg);
+
+
+/**
+ * asm64.asm里的vmm入口点
+ *
+ * @return ASM void __stdcall: 
+ */
+ASM void __stdcall __vmm_entry_point();
+
+/**
+ * asm64.asm里的加载段描述符访问权限
+ *
+ * @param _In_ ULONG_PTR segmentSelector: 
+ * @return ULONG_PTR __stdcall: 
+ */
+ ULONG_PTR __stdcall __load_access_rights_byte(_In_ ULONG_PTR segmentSelector);
 
 EXTERN_C_END

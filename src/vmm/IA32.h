@@ -3,7 +3,6 @@
 
 
 #define MSR_APIC_BASE                       0x01B
-#define MSR_IA32_FEATURE_CONTROL            0x03A
 
 #define MSR_IA32_VMX_BASIC                  0x480
 #define MSR_IA32_VMX_PINBASED_CTLS          0x481
@@ -28,12 +27,6 @@
 #define MSR_IA32_SYSENTER_ESP               0x175
 #define MSR_IA32_SYSENTER_EIP               0x176
 #define MSR_IA32_DEBUGCTL                   0x1D9
-
-#define MSR_LSTAR                           0xC0000082
-
-#define MSR_FS_BASE                         0xC0000100
-#define MSR_GS_BASE                         0xC0000101
-#define MSR_SHADOW_GS_BASE                  0xC0000102        // SwapGS GS shadow
 
 
 /*
@@ -89,11 +82,6 @@
 #define MSR_IA32_VMX_PROCBASED_CTLS		0x482
 #define MSR_IA32_VMX_EXIT_CTLS		0x483
 #define MSR_IA32_VMX_ENTRY_CTLS		0x484
-
-#define MSR_IA32_SYSENTER_CS		0x174
-#define MSR_IA32_SYSENTER_ESP		0x175
-#define MSR_IA32_SYSENTER_EIP		0x176
-#define MSR_IA32_DEBUGCTL			0x1d9
 
 
 #define MSR_EFER 0xc0000080           /* extended feature register */
@@ -283,3 +271,493 @@ union EptVpidCapMsr
 		unsigned reserved9 : 20;                                        //!< [44:63]
 	} fields;
 };
+
+struct VmxoffContext
+{
+	ULONG_PTR rflags;
+	ULONG_PTR rsp;
+	ULONG_PTR rip;
+};
+
+union RFLAGS
+{
+	ULONG64 all;
+	struct
+	{
+		unsigned CF : 1;
+		unsigned Unknown_1 : 1;	//Always 1
+		unsigned PF : 1;
+		unsigned Unknown_2 : 1;	//Always 0
+		unsigned AF : 1;
+		unsigned Unknown_3 : 1;	//Always 0
+		unsigned ZF : 1;
+		unsigned SF : 1;
+		unsigned TF : 1;
+		unsigned IF : 1;
+		unsigned DF : 1;
+		unsigned OF : 1;
+		unsigned TOPL : 2;
+		unsigned NT : 1;
+		unsigned Unknown_4 : 1;
+		unsigned RF : 1;
+		unsigned VM : 1;
+		unsigned AC : 1;
+		unsigned VIF : 1;
+		unsigned VIP : 1;
+		unsigned ID : 1;
+		unsigned Reserved : 10;	//Always 0
+		unsigned Reserved_64 : 32;	//Always 0
+	}fields;
+};
+
+struct Registers64
+{
+	RFLAGS rflags;
+	ULONG_PTR r15;
+	ULONG_PTR r14;
+	ULONG_PTR r13;
+	ULONG_PTR r12;
+	ULONG_PTR r11;
+	ULONG_PTR r10;
+	ULONG_PTR r9;
+	ULONG_PTR r8;
+	ULONG_PTR rdi;
+	ULONG_PTR rsi;
+	ULONG_PTR rbp;
+	ULONG_PTR rsp;
+	ULONG_PTR rbx;
+	ULONG_PTR rdx;
+	ULONG_PTR rcx;
+	ULONG_PTR rax;
+};
+
+struct VmxCpuContext
+{
+	PVOID vmxonRegion;
+	PVOID vmcsRegion;
+	PVOID vmStack;
+	PVOID vmStackBase;
+
+	ULONG64 originalLstar;
+	PVOID newKiSystemCall64;
+	BOOLEAN isVmxEnable;
+};
+
+// VMCS data fields
+typedef enum _VMCS_ENCODING
+{
+	VIRTUAL_PROCESSOR_ID = 0x00000000,  // 16-Bit Control Field
+	POSTED_INTERRUPT_NOTIFICATION = 0x00000002,
+	EPTP_INDEX = 0x00000004,
+	GUEST_ES_SELECTOR = 0x00000800,  // 16-Bit Guest-State Fields
+	GUEST_CS_SELECTOR = 0x00000802,
+	GUEST_SS_SELECTOR = 0x00000804,
+	GUEST_DS_SELECTOR = 0x00000806,
+	GUEST_FS_SELECTOR = 0x00000808,
+	GUEST_GS_SELECTOR = 0x0000080a,
+	GUEST_LDTR_SELECTOR = 0x0000080c,
+	GUEST_TR_SELECTOR = 0x0000080e,
+	GUEST_INTERRUPT_STATUS = 0x00000810,
+	HOST_ES_SELECTOR = 0x00000c00,  // 16-Bit Host-State Fields
+	HOST_CS_SELECTOR = 0x00000c02,
+	HOST_SS_SELECTOR = 0x00000c04,
+	HOST_DS_SELECTOR = 0x00000c06,
+	HOST_FS_SELECTOR = 0x00000c08,
+	HOST_GS_SELECTOR = 0x00000c0a,
+	HOST_TR_SELECTOR = 0x00000c0c,
+	IO_BITMAP_A = 0x00002000,  // 64-Bit Control Fields
+	IO_BITMAP_A_HIGH = 0x00002001,
+	IO_BITMAP_B = 0x00002002,
+	IO_BITMAP_B_HIGH = 0x00002003,
+	MSR_BITMAP = 0x00002004,
+	MSR_BITMAP_HIGH = 0x00002005,
+	VM_EXIT_MSR_STORE_ADDR = 0x00002006,
+	VM_EXIT_MSR_STORE_ADDR_HIGH = 0x00002007,
+	VM_EXIT_MSR_LOAD_ADDR = 0x00002008,
+	VM_EXIT_MSR_LOAD_ADDR_HIGH = 0x00002009,
+	VM_ENTRY_MSR_LOAD_ADDR = 0x0000200a,
+	VM_ENTRY_MSR_LOAD_ADDR_HIGH = 0x0000200b,
+	EXECUTIVE_VMCS_POINTER = 0x0000200c,
+	EXECUTIVE_VMCS_POINTER_HIGH = 0x0000200d,
+	TSC_OFFSET = 0x00002010,
+	TSC_OFFSET_HIGH = 0x00002011,
+	VIRTUAL_APIC_PAGE_ADDR = 0x00002012,
+	VIRTUAL_APIC_PAGE_ADDR_HIGH = 0x00002013,
+	APIC_ACCESS_ADDR = 0x00002014,
+	APIC_ACCESS_ADDR_HIGH = 0x00002015,
+	EPT_POINTER = 0x0000201a,
+	EPT_POINTER_HIGH = 0x0000201b,
+	EOI_EXIT_BITMAP_0 = 0x0000201c,
+	EOI_EXIT_BITMAP_0_HIGH = 0x0000201d,
+	EOI_EXIT_BITMAP_1 = 0x0000201e,
+	EOI_EXIT_BITMAP_1_HIGH = 0x0000201f,
+	EOI_EXIT_BITMAP_2 = 0x00002020,
+	EOI_EXIT_BITMAP_2_HIGH = 0x00002021,
+	EOI_EXIT_BITMAP_3 = 0x00002022,
+	EOI_EXIT_BITMAP_3_HIGH = 0x00002023,
+	EPTP_LIST_ADDRESS = 0x00002024,
+	EPTP_LIST_ADDRESS_HIGH = 0x00002025,
+	VMREAD_BITMAP_ADDRESS = 0x00002026,
+	VMREAD_BITMAP_ADDRESS_HIGH = 0x00002027,
+	VMWRITE_BITMAP_ADDRESS = 0x00002028,
+	VMWRITE_BITMAP_ADDRESS_HIGH = 0x00002029,
+	VIRTUALIZATION_EXCEPTION_INFO_ADDDRESS = 0x0000202a,
+	VIRTUALIZATION_EXCEPTION_INFO_ADDDRESS_HIGH = 0x0000202b,
+	XSS_EXITING_BITMAP = 0x0000202c,
+	XSS_EXITING_BITMAP_HIGH = 0x0000202d,
+	GUEST_PHYSICAL_ADDRESS = 0x00002400,  // 64-Bit Read-Only Data Field
+	GUEST_PHYSICAL_ADDRESS_HIGH = 0x00002401,
+	VMCS_LINK_POINTER = 0x00002800,  // 64-Bit Guest-State Fields
+	VMCS_LINK_POINTER_HIGH = 0x00002801,
+	GUEST_IA32_DEBUGCTL = 0x00002802,
+	GUEST_IA32_DEBUGCTL_HIGH = 0x00002803,
+	GUEST_IA32_PAT = 0x00002804,
+	GUEST_IA32_PAT_HIGH = 0x00002805,
+	GUEST_IA32_EFER = 0x00002806,
+	GUEST_IA32_EFER_HIGH = 0x00002807,
+	GUEST_IA32_PERF_GLOBAL_CTRL = 0x00002808,
+	GUEST_IA32_PERF_GLOBAL_CTRL_HIGH = 0x00002809,
+	GUEST_PDPTR0 = 0x0000280a,
+	GUEST_PDPTR0_HIGH = 0x0000280b,
+	GUEST_PDPTR1 = 0x0000280c,
+	GUEST_PDPTR1_HIGH = 0x0000280d,
+	GUEST_PDPTR2 = 0x0000280e,
+	GUEST_PDPTR2_HIGH = 0x0000280f,
+	GUEST_PDPTR3 = 0x00002810,
+	GUEST_PDPTR3_HIGH = 0x00002811,
+	HOST_IA32_PAT = 0x00002c00,  // 64-Bit Host-State Fields
+	HOST_IA32_PAT_HIGH = 0x00002c01,
+	HOST_IA32_EFER = 0x00002c02,
+	HOST_IA32_EFER_HIGH = 0x00002c03,
+	HOST_IA32_PERF_GLOBAL_CTRL = 0x00002c04,
+	HOST_IA32_PERF_GLOBAL_CTRL_HIGH = 0x00002c05,
+	PIN_BASED_VM_EXEC_CONTROL = 0x00004000,  // 32-Bit Control Fields
+	CPU_BASED_VM_EXEC_CONTROL = 0x00004002,
+	EXCEPTION_BITMAP = 0x00004004,
+	PAGE_FAULT_ERROR_CODE_MASK = 0x00004006,
+	PAGE_FAULT_ERROR_CODE_MATCH = 0x00004008,
+	CR3_TARGET_COUNT = 0x0000400a,
+	VM_EXIT_CONTROLS = 0x0000400c,
+	VM_EXIT_MSR_STORE_COUNT = 0x0000400e,
+	VM_EXIT_MSR_LOAD_COUNT = 0x00004010,
+	VM_ENTRY_CONTROLS = 0x00004012,
+	VM_ENTRY_MSR_LOAD_COUNT = 0x00004014,
+	VM_ENTRY_INTR_INFO_FIELD = 0x00004016,
+	VM_ENTRY_EXCEPTION_ERROR_CODE = 0x00004018,
+	VM_ENTRY_INSTRUCTION_LEN = 0x0000401a,
+	TPR_THRESHOLD = 0x0000401c,
+	SECONDARY_VM_EXEC_CONTROL = 0x0000401e,
+	PLE_GAP = 0x00004020,
+	PLE_WINDOW = 0x00004022,
+	VM_INSTRUCTION_ERROR = 0x00004400,  // 32-Bit Read-Only Data Fields
+	VM_EXIT_REASON = 0x00004402,
+	VM_EXIT_INTR_INFO = 0x00004404,
+	VM_EXIT_INTR_ERROR_CODE = 0x00004406,
+	IDT_VECTORING_INFO_FIELD = 0x00004408,
+	IDT_VECTORING_ERROR_CODE = 0x0000440a,
+	VM_EXIT_INSTRUCTION_LEN = 0x0000440c,
+	VMX_INSTRUCTION_INFO = 0x0000440e,
+	GUEST_ES_LIMIT = 0x00004800,  // 32-Bit Guest-State Fields
+	GUEST_CS_LIMIT = 0x00004802,
+	GUEST_SS_LIMIT = 0x00004804,
+	GUEST_DS_LIMIT = 0x00004806,
+	GUEST_FS_LIMIT = 0x00004808,
+	GUEST_GS_LIMIT = 0x0000480a,
+	GUEST_LDTR_LIMIT = 0x0000480c,
+	GUEST_TR_LIMIT = 0x0000480e,
+	GUEST_GDTR_LIMIT = 0x00004810,
+	GUEST_IDTR_LIMIT = 0x00004812,
+	GUEST_ES_AR_BYTES = 0x00004814,
+	GUEST_CS_AR_BYTES = 0x00004816,
+	GUEST_SS_AR_BYTES = 0x00004818,
+	GUEST_DS_AR_BYTES = 0x0000481a,
+	GUEST_FS_AR_BYTES = 0x0000481c,
+	GUEST_GS_AR_BYTES = 0x0000481e,
+	GUEST_LDTR_AR_BYTES = 0x00004820,
+	GUEST_TR_AR_BYTES = 0x00004822,
+	GUEST_INTERRUPTIBILITY_INFO = 0x00004824,
+	GUEST_ACTIVITY_STATE = 0x00004826,
+	GUEST_SMBASE = 0x00004828,
+	GUEST_SYSENTER_CS = 0x0000482a,
+	VMX_PREEMPTION_TIMER_VALUE = 0x0000482e,
+	HOST_IA32_SYSENTER_CS = 0x00004c00,  // 32-Bit Host-State Field
+	CR0_GUEST_HOST_MASK = 0x00006000,    // Natural-Width Control Fields
+	CR4_GUEST_HOST_MASK = 0x00006002,
+	CR0_READ_SHADOW = 0x00006004,
+	CR4_READ_SHADOW = 0x00006006,
+	CR3_TARGET_VALUE0 = 0x00006008,
+	CR3_TARGET_VALUE1 = 0x0000600a,
+	CR3_TARGET_VALUE2 = 0x0000600c,
+	CR3_TARGET_VALUE3 = 0x0000600e,
+	EXIT_QUALIFICATION = 0x00006400,  // Natural-Width Read-Only Data Fields
+	IO_RCX = 0x00006402,
+	IO_RSI = 0x00006404,
+	IO_RDI = 0x00006406,
+	IO_RIP = 0x00006408,
+	GUEST_LINEAR_ADDRESS = 0x0000640a,
+	GUEST_CR0 = 0x00006800,  // Natural-Width Guest-State Fields
+	GUEST_CR3 = 0x00006802,
+	GUEST_CR4 = 0x00006804,
+	GUEST_ES_BASE = 0x00006806,
+	GUEST_CS_BASE = 0x00006808,
+	GUEST_SS_BASE = 0x0000680a,
+	GUEST_DS_BASE = 0x0000680c,
+	GUEST_FS_BASE = 0x0000680e,
+	GUEST_GS_BASE = 0x00006810,
+	GUEST_LDTR_BASE = 0x00006812,
+	GUEST_TR_BASE = 0x00006814,
+	GUEST_GDTR_BASE = 0x00006816,
+	GUEST_IDTR_BASE = 0x00006818,
+	GUEST_DR7 = 0x0000681a,
+	GUEST_RSP = 0x0000681c,
+	GUEST_RIP = 0x0000681e,
+	GUEST_RFLAGS = 0x00006820,
+	GUEST_PENDING_DBG_EXCEPTIONS = 0x00006822,
+	GUEST_SYSENTER_ESP = 0x00006824,
+	GUEST_SYSENTER_EIP = 0x00006826,
+	HOST_CR0 = 0x00006c00,  // Natural-Width Host-State Fields
+	HOST_CR3 = 0x00006c02,
+	HOST_CR4 = 0x00006c04,
+	HOST_FS_BASE = 0x00006c06,
+	HOST_GS_BASE = 0x00006c08,
+	HOST_TR_BASE = 0x00006c0a,
+	HOST_GDTR_BASE = 0x00006c0c,
+	HOST_IDTR_BASE = 0x00006c0e,
+	HOST_IA32_SYSENTER_ESP = 0x00006c10,
+	HOST_IA32_SYSENTER_EIP = 0x00006c12,
+	HOST_RSP = 0x00006c14,
+	HOST_RIP = 0x00006c16
+} VMCS_ENCODING;
+
+union SegmentAttributes
+{
+	USHORT UCHARs;
+	struct
+	{
+		USHORT type : 4;              /* 0;  Bit 40-43 */
+		USHORT s : 1;                 /* 4;  Bit 44 */
+		USHORT dpl : 2;               /* 5;  Bit 45-46 */
+		USHORT p : 1;                 /* 7;  Bit 47 */
+		// gap!       
+		USHORT avl : 1;               /* 8;  Bit 52 */
+		USHORT l : 1;                 /* 9;  Bit 53 */
+		USHORT db : 1;                /* 10; Bit 54 */
+		USHORT g : 1;                 /* 11; Bit 55 */
+		USHORT Gap : 4;
+	} fields;
+};
+
+struct SegmentSelector
+{
+	USHORT sel;
+	SegmentAttributes attributes;
+	ULONG limit;
+	ULONG64 base;
+};
+
+typedef struct
+{
+	USHORT limit0;
+	USHORT base0;
+	UCHAR  base1;
+	UCHAR  attr0;
+	UCHAR  limit1attr1;
+	UCHAR  base2;
+} SegmentDescriptor2;
+
+#define LA_ACCESSED		0x01
+#define LA_READABLE		0x02    // for code segments
+#define LA_WRITABLE		0x02    // for data segments
+#define LA_CONFORMING	0x04    // for code segments
+#define LA_EXPANDDOWN	0x04    // for data segments
+#define LA_CODE			0x08
+#define LA_STANDARD		0x10
+#define LA_DPL_0		0x00
+#define LA_DPL_1		0x20
+#define LA_DPL_2		0x40
+#define LA_DPL_3		0x60
+#define LA_PRESENT		0x80
+
+#define LA_LDT64		0x02
+#define LA_ATSS64		0x09
+#define LA_BTSS64		0x0b
+#define LA_CALLGATE64	0x0c
+#define LA_INTGATE64	0x0e
+#define LA_TRAPGATE64	0x0f
+
+#define HA_AVAILABLE	0x01
+#define HA_LONG			0x02
+#define HA_DB			0x04
+#define HA_GRANULARITY	0x08
+
+#define P_PRESENT			0x01
+#define P_WRITABLE			0x02
+#define P_USERMODE			0x04
+#define P_WRITETHROUGH		0x08
+#define P_CACHE_DISABLED	0x10
+#define P_ACCESSED			0x20
+#define P_DIRTY				0x40
+#define P_LARGE				0x80
+#define P_GLOBAL			0x100
+
+#define	PML4_BASE	0xFFFFF6FB7DBED000 //和windows内核的四个常量对应
+#define	PDP_BASE	0xFFFFF6FB7DA00000 //#define PXE_BASE 0xFFFFF6FB7DBED000UI64
+#define	PD_BASE		0xFFFFF6FB40000000 //#define PPE_BASE 0xFFFFF6FB7DA00000UI64
+#define	PT_BASE		0xFFFFF68000000000 //#define PDE_BASE 0xFFFFF6FB40000000UI64
+//#define PTE_BASE 0xFFFFF68000000000UI64
+
+#pragma pack(1)
+// 默认8字节对齐,会导致lgdt和lidt指令无法成功执行
+struct Idtr
+{
+	USHORT limit;
+	ULONG_PTR base;
+};
+
+struct Gdtr
+{
+	USHORT limit;
+	ULONG_PTR base;
+};
+#pragma pack()
+
+union VmxPinBasedControls
+{
+	ULONG32 all;
+	struct
+	{
+		ULONG32 externalInterruptExiting : 1;    // [0]
+		ULONG32 reserved1 : 2;                   // [1-2]
+		ULONG32 nmiExiting : 1;                  // [3]
+		ULONG32 reserved2 : 1;                   // [4]
+		ULONG32 virtualNMIs : 1;                 // [5]
+		ULONG32 activateVMXPreemptionTimer : 1;  // [6]
+		ULONG32 processPostedInterrupts : 1;     // [7]
+	} fields;
+};
+
+union VmxCpuBasedControls
+{
+	ULONG32 all;
+	struct
+	{
+		ULONG32 reserved1 : 2;                 // [0-1]
+		ULONG32 interruptWindowExiting : 1;    // [2]
+		ULONG32 useTSCOffseting : 1;           // [3]
+		ULONG32 reserved2 : 3;                 // [4-6]
+		ULONG32 hLTExiting : 1;                // [7]
+		ULONG32 reserved3 : 1;                 // [8]
+		ULONG32 ibvkogGExiting : 1;             // [9]
+		ULONG32 mwaitExiting : 1;              // [10]
+		ULONG32 rdpmcExiting : 1;              // [11]
+		ULONG32 rdtsCExiting : 1;              // [12]
+		ULONG32 reserved4 : 2;                 // [13-14]
+		ULONG32 cr3LoadExiting : 1;            // [15]
+		ULONG32 cr3StoreExiting : 1;           // [16]
+		ULONG32 reserved5 : 2;                 // [17-18]
+		ULONG32 cr8LoadExiting : 1;            // [19]
+		ULONG32 cr8StoreExiting : 1;           // [20]
+		ULONG32 useTPRShadowExiting : 1;       // [21]
+		ULONG32 nmiWindowExiting : 1;          // [22]
+		ULONG32 movDRExiting : 1;              // [23]
+		ULONG32 unconditionalIOExiting : 1;    // [24]
+		ULONG32 useIOBitmaps : 1;              // [25]
+		ULONG32 reserved6 : 1;                 // [26]
+		ULONG32 monitorTrapFlag : 1;           // [27]
+		ULONG32 useMSRBitmaps : 1;             // [28]
+		ULONG32 monitorExiting : 1;            // [29]
+		ULONG32 pauseExiting : 1;              // [30]
+		ULONG32 activateSecondaryControl : 1;  // [31]
+	} fields;
+};
+
+union VmxVmEnterControls
+{
+	ULONG32 all;
+	struct
+	{
+		ULONG32 reserved1 : 2;                       // [0-1]
+		ULONG32 loadDebugControls : 1;               // [2]
+		ULONG32 reserved2 : 6;                       // [3-8]
+		ULONG32 ia32eModeGuest : 1;                  // [9]
+		ULONG32 entryToSMM : 1;                      // [10]
+		ULONG32 deactivateDualMonitorTreatment : 1;  // [11]
+		ULONG32 reserved3 : 1;                       // [12]
+		ULONG32 loadIA32_PERF_GLOBAL_CTRL : 1;       // [13]
+		ULONG32 loadIA32_PAT : 1;                    // [14]
+		ULONG32 loadIA32_EFER : 1;                   // [15]
+	} fields;
+};
+
+union VmxVmExitControls
+{
+	ULONG32 all;
+	struct
+	{
+		ULONG32 reserved1 : 2;                    // [0-1]
+		ULONG32 saveDebugControls : 1;            // [2]
+		ULONG32 reserved2 : 6;                    // [3-8]
+		ULONG32 hostAddressSpaceSize : 1;         // [9]
+		ULONG32 reserved3 : 2;                    // [10-11]
+		ULONG32 loadIA32_PERF_GLOBAL_CTRL : 1;    // [12]
+		ULONG32 reserved4 : 2;                    // [13-14]
+		ULONG32 acknowledgeInterruptOnExit : 1;   // [15]
+		ULONG32 reserved5 : 2;                    // [16-17]
+		ULONG32 saveIA32_PAT : 1;                 // [18]
+		ULONG32 loadIA32_PAT : 1;                 // [19]
+		ULONG32 saveIA32_EFER : 1;                // [20]
+		ULONG32 loadIA32_EFER : 1;                // [21]
+		ULONG32 saveVMXPreemptionTimerValue : 1;  // [22]
+	} fields;
+};
+
+typedef union VmxSecondaryCpuBasedControls
+{
+	ULONG32 all;
+	struct
+	{
+		ULONG32 virtualizeAPICAccesses : 1;      // [0]
+		ULONG32 enableEPT : 1;                   // [1]
+		ULONG32 descriptorTableExiting : 1;      // [2]
+		ULONG32 enableRDTSCP : 1;                // [3]
+		ULONG32 virtualizeX2APICMode : 1;        // [4]
+		ULONG32 enableVPID : 1;                  // [5]
+		ULONG32 wBINVDExiting : 1;               // [6]
+		ULONG32 unrestrictedGuest : 1;           // [7]
+		ULONG32 apicRegisterVirtualization : 1;  // [8]
+		ULONG32 virtualInterruptDelivery : 1;    // [9]
+		ULONG32 pAUSELoopExiting : 1;            // [10]
+		ULONG32 rdrandExiting : 1;               // [11]
+		ULONG32 enableINVPCID : 1;               // [12]
+		ULONG32 enableVMFunctions : 1;           // [13]
+		ULONG32 vmcsShadowing : 1;               // [14]
+		ULONG32 reserved1 : 1;                   // [15]
+		ULONG32 rdseedExiting : 1;               // [16]
+		ULONG32 reserved2 : 1;                   // [17]
+		ULONG32 eptViolation : 1;                // [18]
+		ULONG32 reserved3 : 1;                   // [19]
+		ULONG32 enableXSAVESXSTORS : 1;          // [20]
+	} fields;
+};
+
+union VmxRegmentDescriptorAccessRight
+{
+	unsigned int all;
+	struct
+	{
+		unsigned type : 4;        //!< [0:3]
+		unsigned system : 1;      //!< [4]
+		unsigned dpl : 2;         //!< [5:6]
+		unsigned present : 1;     //!< [7]
+		unsigned reserved1 : 4;   //!< [8:11]
+		unsigned avl : 1;         //!< [12]
+		unsigned l : 1;           //!< [13] Reserved (except for CS) 64-bit mode
+		unsigned db : 1;          //!< [14]
+		unsigned gran : 1;        //!< [15]
+		unsigned unusable : 1;    //!< [16] Segment unusable
+		unsigned reserved2 : 15;  //!< [17:31]
+	} fields;
+};
+
+
+

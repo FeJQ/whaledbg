@@ -1,5 +1,5 @@
-EXTERN VmLaunchVmx : PROC
-EXTERN VmExitHandler : PROC
+EXTERN vmxLaunch : PROC
+EXTERN vmExitHandler : PROC
 
 EXTERN tagExitVmx : QWORD
 
@@ -52,13 +52,13 @@ ENDM
 .code
 
 ; 启动Vmx
-__vmLaunch PROC
+__vmlaunch PROC
 pushfq
 PUSHAQ
 mov rcx, rsp
 mov rdx, VmLaunchToGuest
 sub rsp, 20h
-call VmLaunchVmx
+call vmxLaunch
 ; int 3
 add rsp, 20h
 POPAQ
@@ -70,27 +70,27 @@ POPAQ
 popfq
 xor rax, rax; STATUS_SUCESS == 0
 ret
-__vmLaunch ENDP
+__vmlaunch ENDP
 
 
 ; Vmm入口点
-__vmmEntryPoint PROC
+__vmm_entry_point PROC
 ; int 3
 mov vmmEntryRcx, rcx
 mov vmmEntryRdx, rdx
-PUSHAQ; 将通用寄存器压栈(rsp, rip, rflags等寄存器会被保存在guest state area里)
+PUSHAQ ;将通用寄存器压栈(rsp, rip, rflags等寄存器会被保存在guest state area里)
 pushfq
 mov rcx, rsp; 将rsp当作参数, 来访问上一步压入栈的寄存器
 sub rsp, 50h
 call VmExitHandler
 add rsp, 50h
 test rax, rax
-jz AsmVmxoff
+jz __vmxoff
 popfq
 POPAQ
 vmresume
 int 3; vmresume后会跳到guestRip, 正常情况下不会执行这条指令
-__vmmEntryPoint ENDP
+__vmm_entry_point ENDP
 
 __vmxoff PROC
 popfq
@@ -175,10 +175,10 @@ mov		ax, WORD PTR gdtr[0]
 ret
 __getgdtlimit ENDP
 
-AsmLoadAccessRightsByte PROC
+__load_access_rights_byte PROC
 lar rax, rcx
 ret
-AsmLoadAccessRightsByte ENDP
+__load_access_rights_byte ENDP
 
 __invd PROC
 invd
