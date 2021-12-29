@@ -1,14 +1,13 @@
 #include <ntddk.h>
 #include "Common.hpp"
-#include "VmxManager.hpp"
+#include "Vmx.h"
 
-VmxManager* vmxManager;
 
 Export void DriverUnload(PDRIVER_OBJECT pDriver)
 {
 	NTSTATUS status;
 	DbgLog("驱动已卸载", 0);
-	status = vmxManager->stop();
+	status = vmxStop();
 	if (!NT_SUCCESS(status))
 	{
 		Common::log(Common::LogLevel::Error, "Enable vmx failed.");
@@ -19,13 +18,12 @@ Export NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 {
 	NTSTATUS status;
 
-	vmxManager = new VmxManager();
 	//DbgBreakPoint();
 	DbgLog("驱动已装载", 0);
 	pDriver->DriverUnload = DriverUnload;
 	//DbgBreakPoint();	
 
-	status = vmxManager->start();
+	status = vmxStart();
 	if (!NT_SUCCESS(status))
 	{
 		KdPrint(("VMX初始化失败"));

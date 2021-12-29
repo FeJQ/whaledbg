@@ -57,6 +57,24 @@ struct EptControl
 	EptEntry* pml4t;
 };
 
+struct PageEntry
+{
+	LIST_ENTRY pageList;
+	//目标指令所在的地址
+	ULONG_PTR targetAddressVa;
+	//目标页首地址
+	ULONG_PTR pageAddressVa;
+	//假页首地址
+	ULONG_PTR shadowPageAddressVa;
+	//目标页所对应的pte
+	EptEntry* pte;
+
+	ULONG_PTR readPage;
+	ULONG_PTR writePage;
+	ULONG_PTR excutePage;
+
+};
+
 class Ept
 {
 public:
@@ -88,6 +106,7 @@ public:
 		__vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, primary.all);
 
 		//PhRootine();
+		return status;
 	}
 
 
@@ -178,6 +197,13 @@ public:
 			}
 		}
 		return pml4t;
+	}
+
+public:
+	static PageEntry*& getStaticPageEntry()
+	{
+		static PageEntry* pageEntry = nullptr;
+		return pageEntry;
 	}
 private:
 	EptControl eptCtrl = { 0 };

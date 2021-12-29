@@ -94,7 +94,7 @@
 #define MSR_SHADOW_GS_BASE  0xc0000102        /* SwapGS GS shadow */
 
 
-struct CpuIdField
+struct CpuidField
 {
 	int rax;
 	int rbx;
@@ -711,7 +711,7 @@ union VmxVmExitControls
 	} fields;
 };
 
-typedef union VmxSecondaryCpuBasedControls
+union VmxSecondaryCpuBasedControls
 {
 	ULONG32 all;
 	struct
@@ -759,5 +759,173 @@ union VmxRegmentDescriptorAccessRight
 	} fields;
 };
 
+union VmExitInformation
+{
+	unsigned int all;
+	struct
+	{
+		unsigned short reason;                     //!< [0:15] VmxExitReason
+		unsigned short reserved1 : 12;             //!< [16:30]
+		unsigned short pending_mtf_vm_exit : 1;    //!< [28]
+		unsigned short vm_exit_from_vmx_root : 1;  //!< [29]
+		unsigned short reserved2 : 1;              //!< [30]
+		unsigned short vm_entry_failure : 1;       //!< [31]
+	} fields;
+};
 
+enum VmExitReason
+{
+	ExceptionNmi = 0,    // Exception or non-maskable interrupt (NMI).
+	ExternalInterrupt = 1,    // External interrupt.
+	TripleFault = 2,    // Triple fault.
+	Init = 3,    // INIT signal.
+	Sipi = 4,    // Start-up IPI (SIPI).
+	IoSmi = 5,    // I/O system-management interrupt (SMI).
+	OtherSmi = 6,    // Other SMI.
+	PendingInterrupt = 7,    // Interrupt window exiting.
+	NmiWindow = 8,    // NMI window exiting.
+	TaskSwitch = 9,    // Task switch.
+	Cpuid = 10,   // Guest software attempted to execute CPUID.
+	GetSec = 11,   // Guest software attempted to execute GETSEC.
+	Hlt = 12,   // Guest software attempted to execute HLT.
+	Invd = 13,   // Guest software attempted to execute INVD.
+	Invlpg = 14,   // Guest software attempted to execute INVLPG.
+	Rdpmc = 15,   // Guest software attempted to execute RDPMC.
+	Rdtsc = 16,   // Guest software attempted to execute RDTSC.
+	Rsm = 17,   // Guest software attempted to execute RSM in SMM.
+	Vmcall = 18,   // Guest software executed VMCALL.
+	Vmclear = 19,   // Guest software executed VMCLEAR.
+	Vmlaunch = 20,   // Guest software executed VMLAUNCH.
+	Vmptrld = 21,   // Guest software executed VMPTRLD.
+	Vmptrst = 22,   // Guest software executed VMPTRST.
+	Vmread = 23,   // Guest software executed VMREAD.
+	Vmresume = 24,   // Guest software executed VMRESUME.
+	Vmrite = 25,   // Guest software executed VMWRITE.
+	Vmxoff = 26,   // Guest software executed VMXOFF.
+	Vmxon = 27,   // Guest software executed VMXON.
+	CrAccess = 28,   // Control-register accesses.
+	DrAccess = 29,   // Debug-register accesses.
+	IoInstruction = 30,   // I/O instruction.
+	MsrRead = 31,   // RDMSR. Guest software attempted to execute RDMSR.
+	MsrWrite = 32,   // WRMSR. Guest software attempted to execute WRMSR.
+	InvalidGuestState = 33,   // VM-entry failure due to invalid guest state.
+	MsrLoading = 34,   // VM-entry failure due to MSR loading.
+	Reserved35 = 35,   // Reserved
+	MwaitInstruction = 36,   // Guest software executed MWAIT.
+	Mtf = 37,   // VM-exit due to monitor trap flag.
+	Reserved38 = 38,   // Reserved
+	MonitorInstruction = 39,   // Guest software attempted to execute MONITOR.
+	PauseInstruction = 40,   // Guest software attempted to execute PAUSE.
+	MachineCheck = 41,   // VM-entry failure due to machine-check.
+	Reserved42 = 42,   // Reserved
+	TprBelowThreshold = 43,   // TPR below threshold. Guest software executed MOV to CR8.
+	ApicAccess = 44,   // APIC access. Guest software attempted to access memory at a physical address on the APIC-access page.
+	VirtualizedEio = 45,   // EOI virtualization was performed for a virtual interrupt whose vector indexed a bit set in the EOIexit bitmap
+	XdtrAccess = 46,   // Guest software attempted to execute LGDT, LIDT, SGDT, or SIDT.
+	TrAccess = 47,   // Guest software attempted to execute LLDT, LTR, SLDT, or STR.
+	EptViolation = 48,   // An attempt to access memory with a guest-physical address was disallowed by the configuration of the EPT paging structures.
+	EptMisconfig = 49,   // An attempt to access memory with a guest-physical address encountered a misconfigured EPT paging-structure entry.
+	InvEpt = 50,   // Guest software attempted to execute INVEPT.
+	Rdtscp = 51,   // Guest software attempted to execute RDTSCP.
+	PreemptTimer = 52,   // VMX-preemption timer expired. The preemption timer counted down to zero.
+	Invvpid = 53,   // Guest software attempted to execute INVVPID.
+	Wbinvd = 54,   // Guest software attempted to execute WBINVD
+	Xsetbv = 55,   // Guest software attempted to execute XSETBV.
+	ApicWrite = 56,   // Guest completed write to virtual-APIC.
+	Rdrand = 57,   // Guest software attempted to execute RDRAND.
+	Invpcid = 58,   // Guest software attempted to execute INVPCID.
+	Vmfunc = 59,   // Guest software attempted to execute VMFUNC.
+	Reserved60 = 60,   // Reserved
+	Rdseed = 61,   // Guest software attempted to executed RDSEED and exiting was enabled.
+	Reserved62 = 62,   // Reserved
+	Xsaves = 63,   // Guest software attempted to executed XSAVES and exiting was enabled.
+	Xrstors = 64,   // Guest software attempted to executed XRSTORS and exiting was enabled.
+
+	MaxGuestVmexit = 65
+};
+
+enum AccessType
+{
+	MOV_TO_CR = 0,
+	MOV_FROM_CR = 1,
+	CLTS,
+	LMSW
+};
+
+union ExitQualification
+{
+	ULONG_PTR all;
+
+	// Task Switch 
+	// See:Table  27-2
+	struct
+	{
+
+	}TaskSwitch;
+
+	// Control-Registers Accesses
+	// See:Table 27-3
+	struct
+	{
+		ULONG_PTR registerNumber : 4;   //!< [0:3]
+		AccessType accessType : 2;        //!< [4:5]
+		ULONG_PTR lmswOperandType : 1;  //!< [6]
+		ULONG_PTR reserved1 : 1;          //!< [7]
+		ULONG_PTR generalRegister : 4;        //!< [8:11]
+		ULONG_PTR reserved2 : 4;          //!< [12:15]
+		ULONG_PTR lmswSourceData : 16;  //!< [16:31]
+		ULONG_PTR reserved3 : 32;         //!< [32:63]
+	} crAccess;
+
+	// Mov Debug-Regsters
+	// See:Table 27-4
+	struct
+	{
+		ULONG_PTR registerNumber : 3;  //!< [0:2] 
+		ULONG_PTR reserved1 : 1;        //!< [3]
+		ULONG_PTR direction : 1;        //!< [4] (0=mov to dr,1=mov from dr)
+		ULONG_PTR reserved2 : 3;        //!< [5:7]
+		ULONG_PTR generalRegister : 4;      //!< [8:11]
+		ULONG_PTR reserved3 : 20;       //!<
+		ULONG_PTR reserved4 : 32;       //!< [12:63]
+	}  drAccess;
+
+	// I/O Instructions
+	// See:Table 27-5
+	struct
+	{
+		ULONG_PTR accessSize : 3;      //!< [0:2] (0=1byte,1=2byte,2=4byte)
+		ULONG_PTR direction : 1;           //!< [3] (0=out,1=in)
+		ULONG_PTR stringInstruction : 1;  //!< [4] (0=not string,1=string)
+		ULONG_PTR repPrefixed : 1;        //!< [5] (0=not rep,1=rep)
+		ULONG_PTR operandEncoding : 1;    //!< [6] (0=dx,1=immediate)
+		ULONG_PTR reserved1 : 9;           //!< [7:15] 
+		ULONG_PTR portNumber : 16;        //!< [16:31]
+	} ioInst;
+
+	// APIC-Access
+	// See:Table 27-6
+	struct
+	{
+
+	}apicAccess;
+
+	// EPT Violations
+	// See:Table 27-7
+	struct
+	{
+		ULONG64 readAccess : 1;                   //!< [0]
+		ULONG64 writeAccess : 1;                  //!< [1]
+		ULONG64 executeAccess : 1;                //!< [2]
+		ULONG64 eptReadable : 1;                  //!< [3]
+		ULONG64 eptWriteable : 1;                 //!< [4]
+		ULONG64 eptExecutable : 1;                //!< [5]
+		ULONG64 reserved1 : 1;					 //!< [6]
+		ULONG64 validGuestLinearAddress : 1;    //!< [7]
+		ULONG64 causedByTranslation : 1;         //!< [8]
+		ULONG64 reserved2 : 3;					//!< [9:11]
+		ULONG64 nmiUnblocking : 1;                //!< [12]
+		ULONG64 reserved3 : 51;					//!< [13:63]
+	} eptViolation;
+};
 

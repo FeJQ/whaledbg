@@ -3,6 +3,15 @@
 class Util
 {
 public:
+	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)())
+	{
+		return performForEachProcessor(routine);
+	}
+
+	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)(void* arg), void* context = nullptr)
+	{
+		return performForEachProcessor(routine, context);
+	}
 	/**
 	 * 在每个处理器上执行routine
 	 *
@@ -34,13 +43,12 @@ public:
 			status = routine(context1, context2);
 
 			KeRevertToUserGroupAffinityThread(&preAffinity);
-			if (!NT_SUCCESS(status))
-			{
-				return status;
-			}
+			NT_CHECK(status);
 		}
 		return STATUS_SUCCESS;
 	}
+
+	
 
 	/**
 	 * 申请非分页内存

@@ -1,7 +1,6 @@
-EXTERN vmxLaunch : PROC
-EXTERN vmExitHandler : PROC
+EXTERN launchVmx : PROC
+EXTERN vmExitEntryPoint : PROC
 
-EXTERN tagExitVmx : QWORD
 
 .data
 vmmEntryRcx dq 0
@@ -58,7 +57,7 @@ PUSHAQ
 mov rcx, rsp
 mov rdx, VmLaunchToGuest
 sub rsp, 20h
-call vmxLaunch
+call launchVmx
 ; int 3
 add rsp, 20h
 POPAQ
@@ -82,7 +81,7 @@ PUSHAQ ;将通用寄存器压栈(rsp, rip, rflags等寄存器会被保存在guest state area里)
 pushfq
 mov rcx, rsp; 将rsp当作参数, 来访问上一步压入栈的寄存器
 sub rsp, 50h
-call VmExitHandler
+call vmExitEntryPoint
 add rsp, 50h
 test rax, rax
 jz __vmxoff

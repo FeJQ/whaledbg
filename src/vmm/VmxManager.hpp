@@ -15,48 +15,15 @@
 class VmxManager
 {
 public:
-	NTSTATUS start()
-	{
-		NTSTATUS status = STATUS_SUCCESS;
 
-		//检查是否支持VMX
-		status = checkVmxAvailable();
-		NT_CHECK(status);
-
-		//检查是否支持EPT
-		status = checkEptAvailable();
-		NT_CHECK(status);
-
-		//为每一个处理器开启VMX特征
-		status = Util::performForEachProcessor(enableVmxFeature);
-		NT_CHECK(status);
-
-		//申请VMX域空间
-		status = allocateVmxRegion();
-		NT_CHECK(status);
-
-		//在每个处理器上开启VMX
-		status = Util::performForEachProcessor(__vmlaunch);
-		if (!NT_SUCCESS(status))
-		{
-			return status;
-		}
-		return status;
-	}
-	NTSTATUS stop()
-	{
-		return STATUS_SUCCESS;
-	}
-
-private:
-	VmxCpuContext*& getStaticVmxContext()
-	{
-		static VmxCpuContext* vmxCpuContext = NULL;
-		return vmxCpuContext;
-	}
+	/**
+	 * 检查Vmx是否可用
+	 *
+	 * @return NTSTATUS:
+	 */
 	NTSTATUS checkVmxAvailable()
 	{
-		CpuIdField cpuIdField = { 0 };
+		CpuidField cpuIdField = { 0 };
 		Cr0 cr0;
 		Cr4 cr4;
 		ControlMsr controlMsr = { 0 };
@@ -232,11 +199,11 @@ private:
 	/**
 	 * 启动vmx
 	 *
-	 * @param PVOID guestStack: 
-	 * @param PVOID guestResumeRip: 
-	 * @return NTSTATUS: 
+	 * @param PVOID guestStack:
+	 * @param PVOID guestResumeRip:
+	 * @return NTSTATUS:
 	 */
-	 NTSTATUS vmxLaunch(PVOID guestStack, PVOID guestResumeRip)
+	NTSTATUS launchVmx(PVOID guestStack, PVOID guestResumeRip)
 	{
 		NTSTATUS status;
 		VmxCpuContext* currentContext = &getStaticVmxContext()[Util::currentCpuIndex()];
@@ -268,6 +235,54 @@ private:
 		return FALSE;
 	}
 
+	/**
+	 * 退出vmroot
+	 *
+	 * @return NTSTATUS:
+	 */
+	static NTSTATUS quitVmx()
+	{
+		Cr4 cr4;
+
+		//以Guest身份执行vmoff会导致26号vmexit
+		//__vmx_off();
+
+		VmxoffContext context = { 0 };
+		__vmcall(VmcallReason::VmcallVmxOff, &context);
+
+
+		//Cr4.VMXE置0
+		cr4.all = __readcr4();
+		cr4.fields.vmxe = FALSE;
+		__writecr4(cr4.all);
+
+		VmxCpuContext* vmxCpuContext = getStaticVmxContext();
+		if (vmxCpuContext)
+		{
+			ULONG index = Util::currentCpuIndex();
+			if (vmxCpuContext[index].vmxonRegion)
+			{
+				ExFreePoolWithTag(vmxCpuContext[index].vmxonRegion, POOL_TAG_VMXON);
+				vmxCpuContext[index].vmxonRegion = NULL;
+			}
+			if (vmxCpuContext[index].vmcsRegion)
+			{
+				ExFreePoolWithTag(vmxCpuContext[index].vmcsRegion, POOL_TAG_VMCS);
+				vmxCpuContext[index].vmcsRegion = NULL;
+			}
+			if (vmxCpuContext[index].vmStackBase)
+			{
+				ExFreePoolWithTag(vmxCpuContext[index].vmStack, POOL_TAG_HOST_STACK);
+				vmxCpuContext[index].vmStack = NULL;
+				vmxCpuContext[index].vmStackBase = NULL;
+			}
+		}
+
+		return STATUS_SUCCESS;
+
+	}
+
+private:
 	/**
 	 * 开启Root模式,执行vmxon,激活VMCS
 	 *
@@ -333,6 +348,14 @@ private:
 		return status;
 	}
 
+	/**
+	 * 装载vmcs
+	 *
+	 * @param VmxCpuContext * vmxCpuContext:
+	 * @param PVOID guestStack:
+	 * @param PVOID guestResumeRip:
+	 * @return BOOLEAN:
+	 */
 	BOOLEAN setupVmcs(VmxCpuContext* vmxCpuContext, PVOID guestStack, PVOID guestResumeRip)
 	{
 		Gdtr gdtr = { 0 };
@@ -566,6 +589,14 @@ private:
 		return 1;
 	}
 
+	/**
+	 * 加载段描述符
+	 *
+	 * @param OUT SegmentSelector * segmentSelector:
+	 * @param USHORT selector:
+	 * @param ULONG_PTR gdtBase:
+	 * @return NTSTATUS:
+	 */
 	NTSTATUS loadSementDescriptor(OUT SegmentSelector* segmentSelector, USHORT selector, ULONG_PTR gdtBase)
 	{
 		SegmentDescriptor2* segDesc;
@@ -607,6 +638,12 @@ private:
 		return STATUS_SUCCESS;
 	}
 
+	/**
+	 * 获取段描述符访问权限
+	 *
+	 * @param USHORT selector: 段选择子
+	 * @return ULONG:
+	 */
 	ULONG getSegmentAccessRight(USHORT selector)
 	{
 		VmxRegmentDescriptorAccessRight accessRight = { 0 };
@@ -626,21 +663,34 @@ private:
 		return accessRight.all;
 	}
 
+	/**
+	 * 调整Msr寄存器值
+	 * See:24.6.1 Pin-Base VM-Execution Controls
+	 * vmwrite虚拟机控制域时,有些位必须置为0,有些位必须置为1
+	 * 通过读取相应的MSR寄存器来确定哪些位必须置0,哪些位必须置1
+	 *
+	 * @param ULONG msr:
+	 * @param ULONG ctl:
+	 * @return ULONG:
+	 */
 	ULONG updateControlValue(ULONG msr, ULONG ctl)
 	{
-		// See:24.6.1 Pin-Base VM-Execution Controls
-		// vmwrite虚拟机控制域时,有些位必须置为0,有些位必须置为1
-		// 通过读取相应的MSR寄存器来确定哪些位必须置0,哪些位必须置1
+
 		LARGE_INTEGER MsrValue = { 0 };
 		MsrValue.QuadPart = __readmsr(msr);
 		ctl &= MsrValue.HighPart;     /* bit == 0 in high word ==> must be zero */
 		ctl |= MsrValue.LowPart;      /* bit == 1 in low word  ==> must be one  */
 		return ctl;
 	}
+
 	
+
+public:
+	static VmxCpuContext*& getStaticVmxContext()
+	{
+		static VmxCpuContext* vmxCpuContext = nullptr;
+		return vmxCpuContext;
+	}
 private:
 	Ept ept;
-	
-
 };
-
