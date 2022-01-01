@@ -34,7 +34,7 @@ public:
 		CpuIdFiledEcx* cpuIdFiledEcx = (CpuIdFiledEcx*)(&cpuIdField.rcx);
 		if (cpuIdFiledEcx->fields.vmx != 1)
 		{
-			Common::log(Common::LogLevel::Error, "Vt is not supported on this machine.");
+			DbgLog(Common::LogLevel::Error, "Vt is not supported on this machine.");
 			return STATUS_HV_FEATURE_UNAVAILABLE;
 		}
 
@@ -42,7 +42,7 @@ public:
 		cr0.all = __readcr0();
 		if (!cr0.fields.pg || !cr0.fields.ne || !cr0.fields.pe)
 		{
-			Common::log(Common::LogLevel::Error, "Cr0 not supported to be virtualizaion.");
+			DbgLog(Common::LogLevel::Error, "Cr0 not supported to be virtualizaion.");
 			return STATUS_HV_FEATURE_UNAVAILABLE;
 		}
 
@@ -51,7 +51,7 @@ public:
 		basicMsr.all = __readmsr(MSR_IA32_VMX_BASIC);
 		if (basicMsr.fields.memory_type != MemoryType::WriteBack)
 		{
-			Common::log(Common::LogLevel::Error, "Write-back cache type is not supported.");
+			DbgLog(Common::LogLevel::Error, "Write-back cache type is not supported.");
 			return STATUS_HV_FEATURE_UNAVAILABLE;
 		}
 
@@ -101,7 +101,7 @@ public:
 			!capability.fields.support_all_context_invvpid ||
 			!capability.fields.support_single_context_retaining_globals_invvpid)
 		{
-			Common::log(Common::LogLevel::Warnning, "Ept is unavailable.");
+			DbgLog(Common::LogLevel::Warnning, "Ept is unavailable.");
 			return STATUS_FAIL_CHECK;
 		}
 		return STATUS_SUCCESS;
@@ -135,7 +135,7 @@ public:
 		}
 		if (!controlMsr.fields.lock && !controlMsr.fields.enable_vmxon)
 		{
-			Common::log(Common::LogLevel::Error, "Virtualization is not enabled in the BIOS.");
+			DbgLog(Common::LogLevel::Error, "Virtualization is not enabled in the BIOS.");
 			return STATUS_HV_FEATURE_UNAVAILABLE;
 		}
 		return STATUS_SUCCESS;
@@ -160,7 +160,7 @@ public:
 			pVmxonRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMXON); //4KB
 			if (!pVmxonRegion)
 			{
-				Common::log(Common::LogLevel::Error, "Allocate vmxon memory failed.");
+				DbgLog(Common::LogLevel::Error, "Allocate vmxon memory failed.");
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
 			RtlZeroMemory(pVmxonRegion, 0x1000);
@@ -168,7 +168,7 @@ public:
 			pVmcsRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMCS);
 			if (!pVmcsRegion)
 			{
-				Common::log(Common::LogLevel::Error, "Allocate vmcs memory failed.");
+				DbgLog(Common::LogLevel::Error, "Allocate vmcs memory failed.");
 				ExFreePoolWithTag(pVmxonRegion, 0x1000);
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
@@ -177,16 +177,16 @@ public:
 			pVmStack = ExAllocatePoolWithTag(NonPagedPool, KERNEL_STACK_SIZE, POOL_TAG_HOST_STACK);
 			if (!pVmStack)
 			{
-				Common::log(Common::LogLevel::Error, "Allocate host stack memory failed.");
+				DbgLog(Common::LogLevel::Error, "Allocate host stack memory failed.");
 				ExFreePoolWithTag(pVmxonRegion, 0x1000);
 				ExFreePoolWithTag(pVmcsRegion, 0x1000);
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
 			RtlZeroMemory(pVmStack, KERNEL_STACK_SIZE);
 
-			Common::log(Common::LogLevel::Info, "Vmxon region:0x%08X.", pVmxonRegion);
-			Common::log(Common::LogLevel::Info, "Vmcs region:0x%08X.", pVmcsRegion);
-			Common::log(Common::LogLevel::Info, "Host stack region:0x%08X.", pVmStack);
+			DbgLog(Common::LogLevel::Info, "Vmxon region:0x%08X.", pVmxonRegion);
+			DbgLog(Common::LogLevel::Info, "Vmcs region:0x%08X.", pVmcsRegion);
+			DbgLog(Common::LogLevel::Info, "Host stack region:0x%08X.", pVmStack);
 
 			vmxCpuContext[i].vmxonRegion = pVmxonRegion;
 			vmxCpuContext[i].vmcsRegion = pVmcsRegion;
@@ -228,10 +228,10 @@ public:
 		int error = 0;
 		if (__vmx_vmread(VM_INSTRUCTION_ERROR, (size_t*)&error) != 0)
 		{
-			Common::log(Common::LogLevel::Error, "read error code failed");
+			DbgLog(Common::LogLevel::Error, "read error code failed");
 			return FALSE;
 		}
-		Common::log(Common::LogLevel::Error, "vmlaunch failed,error:%d", error);
+		DbgLog(Common::LogLevel::Error, "vmlaunch failed,error:%d", error);
 		return FALSE;
 	}
 
@@ -324,7 +324,7 @@ private:
 		uRet = __vmx_on(&tmpVmxonRegionPa);
 		if (uRet != 0)
 		{
-			Common::log(Common::LogLevel::Error, "perform _vmx_on failed");
+			DbgLog(Common::LogLevel::Error, "perform _vmx_on failed");
 			return STATUS_UNSUCCESSFUL;
 		}
 
@@ -333,7 +333,7 @@ private:
 		uRet = __vmx_vmclear(&tmpVmcsRegionPa);
 		if (uRet != 0)
 		{
-			Common::log(Common::LogLevel::Error, "perform __vmx_vmclear failed");
+			DbgLog(Common::LogLevel::Error, "perform __vmx_vmclear failed");
 			return STATUS_UNSUCCESSFUL;
 		}
 
@@ -342,7 +342,7 @@ private:
 		uRet = __vmx_vmptrld(&tmpVmcsRegionPa);
 		if (uRet != 0)
 		{
-			Common::log(Common::LogLevel::Error, "perform __vmx_vmptrld failed");
+			DbgLog(Common::LogLevel::Error, "perform __vmx_vmptrld failed");
 			return STATUS_UNSUCCESSFUL;
 		}
 		return status;

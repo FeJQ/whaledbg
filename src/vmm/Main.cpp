@@ -3,38 +3,46 @@
 #include "Vmx.h"
 
 
-Export void DriverUnload(PDRIVER_OBJECT pDriver)
+EXTERN_C void DriverUnload(PDRIVER_OBJECT pDriver)
 {
-	NTSTATUS status;
-	DbgLog("驱动已卸载", 0);
-	status = vmxStop();
+	NTSTATUS status = STATUS_SUCCESS;
+	DbgPrint("Hello driver!");
+	//DbgLog(Common::LogLevel::Info, "驱动已卸载");
+	//status = vmxStop();
 	if (!NT_SUCCESS(status))
 	{
-		Common::log(Common::LogLevel::Error, "Enable vmx failed.");
+		DbgLog(Common::LogLevel::Error, "Enable vmx failed.");
 	}
 }
 
-Export NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
+EXTERN_C NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 {
 	NTSTATUS status;
-
-	//DbgBreakPoint();
-	DbgLog("驱动已装载", 0);
+	
+	DbgPrint("Hello world!");
+	DbgBreakPoint();
+	DbgPrint("Hello 1!");
+	DbgBreakPoint();
+	DbgPrint("Hello 2!");
+	DbgBreakPoint();
+	DbgPrint("Hello 3!");
+	DbgBreakPoint();
+	//DbgLog(Common::LogLevel::Info, "驱动已装载");
 	pDriver->DriverUnload = DriverUnload;
-	//DbgBreakPoint();	
-
-	status = vmxStart();
-	if (!NT_SUCCESS(status))
-	{
-		KdPrint(("VMX初始化失败"));
-	}
-	//status = VmStartVmx();
-
-	if (!NT_SUCCESS(status))
-	{
-		DbgLog("VMX开启失败", 0);
-	}
-
-
+	
 	return STATUS_SUCCESS;
+	//status = vmxStart();
+	//if (!NT_SUCCESS(status))
+	//{
+	//	KdPrint(("VMX初始化失败"));
+	//}
+	////status = VmStartVmx();
+
+	//if (!NT_SUCCESS(status))
+	//{
+	//	DbgLog(Common::LogLevel::Error,"VMX开启失败");
+	//}
+
+
+	//return STATUS_SUCCESS;
 }

@@ -5,8 +5,8 @@
 
 #define override
 
-#ifdef DEBUG
-#define DbgLog(message,value) {{KdPrint(("[HVM] %-40s [%p]\n",message,value));}}
+#ifdef _DEBUG
+#define DbgLog(logLevel,...) {Common::log(__FUNCTION__,logLevel,__VA_ARGS__);}
 #else 
 #define DbgLog(message,value)
 #endif // DEBUG
@@ -35,22 +35,22 @@ public:
 		Error,
 		Crash,
 	};
-	static void log(LogLevel level,const char* format...)
+	static void log(const char* functionName, LogLevel level, const char* format...)
 	{
 		char* levelHeader;
 		switch (level)
 		{
 		case LogLevel::Info:
-			levelHeader = "[Info]";
+			levelHeader = "Info:";
 			break;
 		case LogLevel::Warnning:
-			levelHeader = "[Warnning]";
+			levelHeader = "Warnning:";
 			break;
 		case LogLevel::Error:
-			levelHeader = "[Error]";
+			levelHeader = "Error:";
 			break;
 		case LogLevel::Crash:
-			levelHeader = "[Crash]";
+			levelHeader = "Crash:";
 			break;
 		default:
 			levelHeader = "";
@@ -63,7 +63,7 @@ public:
 		va_start(va, format);
 		vsprintf_s(message, format, va);
 		va_end(va);
-		sprintf(finalBuff, "%s%s", levelHeader, message);
+		sprintf(finalBuff, "[WhaleDbg::%s] %s%s", functionName, levelHeader, message);
 		KdPrint((message));
 #endif	
 		return;

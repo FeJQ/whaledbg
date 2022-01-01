@@ -182,7 +182,7 @@ private:
 				__vmx_vmwrite(GUEST_CR4, *pReg);
 				break;
 			default:
-				Common::log(Common::LogLevel::Error, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.registerNumber);
+				DbgLog(Common::LogLevel::Error, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.registerNumber);
 				DbgBreakPoint();
 				break;
 			}
@@ -199,13 +199,13 @@ private:
 				__vmx_vmread(GUEST_CR4, pReg);
 				break;
 			default:
-				Common::log(Common::LogLevel::Error, "[%s]accessType:%d", __FUNCTION__, data.crAccess.registerNumber);
+				DbgLog(Common::LogLevel::Error, "[%s]accessType:%d", __FUNCTION__, data.crAccess.registerNumber);
 				DbgBreakPoint();
 				break;
 			}
 			break;
 		default:
-			Common::log(Common::LogLevel::Error, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.accessType);
+			DbgLog(Common::LogLevel::Error, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.accessType);
 			DbgBreakPoint();
 			break;
 		}
