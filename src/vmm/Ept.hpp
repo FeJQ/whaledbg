@@ -4,10 +4,10 @@
 
 enum EptAccess
 {
-	EptAccessAll = 0b111,
-	EptAccessRead = 0b001,
-	EptAccessWrite = 0b010,
-	EptAccessExecute = 0b100
+	All = 0b111,
+	Read = 0b001,
+	Write = 0b010,
+	Execute = 0b100
 };
 
 union Pml4Entry
@@ -57,27 +57,34 @@ struct EptControl
 	EptEntry* pml4t;
 };
 
-struct PageEntry
+class PageEntry
 {
+public:
 	LIST_ENTRY pageList;
 	//目标指令所在的地址
-	ULONG_PTR targetAddressVa;
+	ULONG_PTR targetAddress;
 	//目标页首地址
-	ULONG_PTR pageAddressVa;
+	ULONG_PTR targetPageAddress;
 	//假页首地址
-	ULONG_PTR shadowPageAddressVa;
+	ULONG_PTR shadowPageAddress;
+
 	//目标页所对应的pte
 	EptEntry* pte;
 
-	ULONG_PTR readPage;
-	ULONG_PTR writePage;
-	ULONG_PTR excutePage;
-
+	//ULONG_PTR readPage;
+	//ULONG_PTR writePage;
+	//ULONG_PTR excutePage;
 };
 
 class Ept
 {
 public:
+	Ept()
+	{
+		this->eptCtrl = { 0 };
+		this->pageEntry = { 0 };
+		InitializeListHead(&pageEntry.pageList);
+	}
 	/**
 	 * 开启Ept
 	 *
@@ -85,12 +92,13 @@ public:
 	 */
 	NTSTATUS enable()
 	{
+		DbgBreakPoint();
 		NTSTATUS status = STATUS_SUCCESS;
 		EptPointer eptp = { 0 };
 		VmxCpuBasedControls primary = { 0 };
 		VmxSecondaryCpuBasedControls secondary = { 0 };
 
-		eptCtrl.pml4t = EptAllocateTable();
+		eptCtrl.pml4t = allocEptMemory();
 
 		// Set up the EPTP
 		eptp.fields.physAddr = MmGetPhysicalAddress(eptCtrl.pml4t).QuadPart >> 12;
@@ -115,7 +123,7 @@ public:
 	 *
 	 * @return EptEntry*: 1级页表(PML4T)的首地址
 	 */
-	EptEntry* EptAllocateTable()
+	EptEntry* allocEptMemory()
 	{
 		//EPT寻址结构
 		//表名      容量        大小(位)
@@ -199,12 +207,155 @@ public:
 		return pml4t;
 	}
 
-public:
-	static PageEntry*& getStaticPageEntry()
+
+
+	/**
+	 * 获取物理地址所对应的PTE
+	 *
+	 * @param EptEntry * pml4t: pml4t首地址
+	 * @param ULONG_PTR pa: 要查询的物理地址
+	 * @return EptEntry*: PTE
+	 */
+	static EptEntry* getPtEntry(EptEntry* pml4t, ULONG_PTR pa)
 	{
-		static PageEntry* pageEntry = nullptr;
-		return pageEntry;
+		ULONG pml4teIndex = (pa & 0xFF8000000000ull) >> (12 + 9 + 9 + 9);
+		ULONG pdpteIndex = (pa & 0x007FC0000000ull) >> (12 + 9 + 9);
+		ULONG pdteIndex = (pa & 0x00003FE00000ull) >> (12 + 9);
+		ULONG pteIndex = (pa & 0x0000001FF000ull) >> (12);
+
+		EptEntry* pml4te = 0;
+		EptEntry* pdpte = 0;
+		EptEntry* pdte = 0;
+		EptEntry* pte = 0;
+
+		pml4te = &pml4t[pml4teIndex];
+		pdpte = &((EptEntry*)Util::paToVa(GetPageHead(pml4t->all)))[pdpteIndex];
+		pdte = &((EptEntry*)Util::paToVa(GetPageHead(pdpte->all)))[pdteIndex];
+		pte = &((EptEntry*)Util::paToVa(GetPageHead(pdte->all)))[pteIndex];
+		return pte;
 	}
+
+	/**
+	 * 隐藏页面
+	 *
+	 * @param PVOID targetAddress:
+	 * @return NTSTATUS:
+	 */
+	NTSTATUS hidePage(PVOID targetAddress)
+	{
+		NTSTATUS status = STATUS_SUCCESS;
+		// 判断目标页是否已经被权限分离过
+		bool flag = false;
+		for (LIST_ENTRY* pLink = this->pageEntry.pageList.Flink; pLink != (PLIST_ENTRY)&this->pageEntry.pageList.Flink; pLink = pLink->Flink)
+		{
+			PageEntry* tempPageEntry = CONTAINING_RECORD(pLink, PageEntry, pageList);
+			if (tempPageEntry->targetPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
+			{
+				flag = true;
+				break;
+			}
+		}
+		if (flag != true) return status;
+
+		// 创建新的PageEntry项
+		PageEntry* newPageEntry = (PageEntry*)ExAllocatePoolWithTag(NonPagedPool, sizeof(PageEntry), 'page');
+		if (!newPageEntry)
+		{
+			return STATUS_MEMORY_NOT_ALLOCATED;
+		}
+		RtlZeroMemory(newPageEntry, sizeof(PageEntry));
+
+		// 记录目标地址, 目标页首地址, 目标页所在的pte, 以及用于替换的假页面
+		newPageEntry->targetAddress = (ULONG_PTR)targetAddress;
+		newPageEntry->targetPageAddress = (ULONG_PTR)PAGE_ALIGN(targetAddress);	
+		newPageEntry->pte = Ept::getPtEntry(eptCtrl.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(targetAddress)).QuadPart);
+		newPageEntry->shadowPageAddress = (ULONG_PTR)ExAllocatePoolWithTag(NonPagedPool, PAGE_SIZE, 'fake');
+		if (!newPageEntry->shadowPageAddress)
+		{
+			return STATUS_MEMORY_NOT_ALLOCATED;
+		}
+		RtlMoveMemory((PVOID)newPageEntry->shadowPageAddress, (PVOID)newPageEntry->targetPageAddress, PAGE_SIZE);	
+
+		// 给假页面对应的pte读写权限
+		status = setPageAccess(newPageEntry->shadowPageAddress, (EptAccess)(EptAccess::Read | EptAccess::Write));
+		NT_CHECK();
+
+		// 给予真实页面只执行的权限
+		status = setPageAccess(newPageEntry->targetPageAddress, EptAccess::Execute);
+		NT_CHECK();
+
+		// 将目标PageEntry添加到page list
+		InsertHeadList(&this->pageEntry.pageList, &newPageEntry->pageList);
+		return status;
+	}
+
+	/**
+	 * 恢复页面
+	 *      
+	 * @param PVOID targetAddress: 
+	 * @return NTSTATUS: 
+	 */
+	 NTSTATUS recoverPage(PVOID targetAddress)
+	{
+		NTSTATUS status = STATUS_SUCCESS;
+		for (LIST_ENTRY* pLink = this->pageEntry.pageList.Flink; pLink != (PLIST_ENTRY)&this->pageEntry.pageList.Flink; pLink = pLink->Flink)
+		{
+			PageEntry* tempPageEntry = CONTAINING_RECORD(pLink, PageEntry, pageList);
+			if (tempPageEntry->targetPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
+			{
+				
+				ExFreePoolWithTag((PVOID)tempPageEntry->shadowPageAddress, 'fake');
+				status = setPageAccess((ULONG_PTR)targetAddress, EptAccess::All);
+				NT_CHECK();
+
+				RemoveHeadList();
+			}
+		}
+	}
+
 private:
-	EptControl eptCtrl = { 0 };
+	/**
+	 * 页表权限分离
+	 *
+	 * @param PVOID targetPageEntry: 目标页表项
+	 * @return NTSTATUS:
+	 */
+	NTSTATUS separatePageAccess(PageEntry* targetPageEntry, EptAccess eptAccess)
+	{
+		NTSTATUS status = STATUS_SUCCESS;
+
+
+
+		/*PVOID NtLoadDriver = (PVOID)0xFFFFF800043594F0;
+		Util::disableMemoryProtect();
+		*(PCHAR)NtLoadDriver = 0xCC;
+		Util::enableMemoryProtect();*/
+
+		setPageAccess(targetPageEntry->targetPageAddress, eptAccess);
+		return status;
+	}
+
+	/**
+	 * 设置页访问权限
+	 *
+	 * @param ULONG_PTR pageAddress:
+	 * @param EptAccess access:
+	 * @return NTSTATUS:
+	 */
+	NTSTATUS setPageAccess(ULONG_PTR pageAddress, EptAccess access)
+	{
+		//获取目标地址对应的pte	
+		EptEntry* pte = Ept::getPtEntry(eptCtrl.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(pageAddress)).QuadPart);
+		//配置权限
+		pte->fields.readAccess = (access & EptAccess::Read) >> 0;
+		pte->fields.writeAccess = (access & EptAccess::Write) >> 1;
+		pte->fields.executeAccess = (access & EptAccess::Execute) >> 2;
+		pte->fields.memoryType = MemoryType::WriteBack;
+	}
+
+public:
+
+private:
+	EptControl eptCtrl;
+	PageEntry pageEntry;
 };

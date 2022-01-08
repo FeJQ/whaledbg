@@ -25,6 +25,8 @@
 #define EXTERN_C_END
 #endif
 
+#define GetPageHead(PA) (PA & 0xFFFFFFFFFFFFF000ull)
+
 class Common
 {
 public:

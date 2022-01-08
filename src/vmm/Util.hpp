@@ -48,7 +48,7 @@ public:
 		return STATUS_SUCCESS;
 	}
 
-	
+
 
 	/**
 	 * 申请非分页内存
@@ -58,8 +58,9 @@ public:
 	 */
 	static PVOID alloc(ULONG_PTR size)
 	{
-		PHYSICAL_ADDRESS p = { 0 };
-		return MmAllocateContiguousMemory(size, p);
+		// pa:调用者可以使用的最高有效物理地址
+		PHYSICAL_ADDRESS pa = { -1 };
+		return MmAllocateContiguousMemory(size, pa);
 	}
 
 	/**
@@ -132,7 +133,25 @@ public:
 #endif // AMD64
 	}
 
+	/**
+	 * 禁用内存保护
+	 *
+	 */
+	static void disableMemoryProtect()
+	{
+		_disable();
+		__writecr0(__readcr0() & (~(0x10000)));
+	}
 
+	/**
+	 * 启用内存保护
+	 *
+	 */
+	static void enableMemoryProtect()
+	{
+		__writecr0(__readcr0() ^ 0x10000);
+		_enable();
+	}
 
 };
 

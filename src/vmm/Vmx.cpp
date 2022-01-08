@@ -56,8 +56,8 @@ NTSTATUS vmExitEntryPoint(Registers64* pGuestRegisters)
 {
 	NTSTATUS status = STATUS_SUCCESS;
 
-	VmxCpuContext* vmxCpuContext = VmxManager::getStaticVmxContext();
+	VmxCpuContext** vmxCpuContext = VmxManager::getStaticVmxContext();
 	Util::performForEachProcessor(VmxManager::quitVmx);
-	Util::free(vmxCpuContext);
+	Util::free(*vmxCpuContext);
 	return status;
 }

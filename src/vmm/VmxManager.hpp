@@ -148,8 +148,9 @@ public:
 	 */
 	NTSTATUS allocateVmxRegion()
 	{
-		VmxCpuContext* vmxCpuContext = getStaticVmxContext();
-		vmxCpuContext = (VmxCpuContext*)Util::alloc(sizeof(VmxCpuContext) * Util::getCpuCount());
+		VmxCpuContext** vmxCpuContext = getStaticVmxContext();
+		DbgBreakPoint();
+		*vmxCpuContext = (VmxCpuContext*)Util::alloc(sizeof(VmxCpuContext) * Util::getCpuCount());
 
 		for (ULONG i = 0; i < Util::getCpuCount(); i++)
 		{
@@ -188,10 +189,10 @@ public:
 			DbgLog(Common::LogLevel::Info, "Vmcs region:0x%08X.", pVmcsRegion);
 			DbgLog(Common::LogLevel::Info, "Host stack region:0x%08X.", pVmStack);
 
-			vmxCpuContext[i].vmxonRegion = pVmxonRegion;
-			vmxCpuContext[i].vmcsRegion = pVmcsRegion;
-			vmxCpuContext[i].vmStack = pVmStack;
-			vmxCpuContext[i].vmStackBase = (CHAR*)pVmStack + KERNEL_STACK_SIZE;
+			(*vmxCpuContext)[i].vmxonRegion = pVmxonRegion;
+			(*vmxCpuContext)[i].vmcsRegion = pVmcsRegion;
+			(*vmxCpuContext)[i].vmStack = pVmStack;
+			(*vmxCpuContext)[i].vmStackBase = (CHAR*)pVmStack + KERNEL_STACK_SIZE;
 		}
 		return STATUS_SUCCESS;
 	}
@@ -206,7 +207,9 @@ public:
 	NTSTATUS launchVmx(PVOID guestStack, PVOID guestResumeRip)
 	{
 		NTSTATUS status;
-		VmxCpuContext* currentContext = &getStaticVmxContext()[Util::currentCpuIndex()];
+		DbgBreakPoint();
+
+		VmxCpuContext* currentContext = getCurrentVmxContext();
 
 		//开启Root模式
 		status = enableRoot(currentContext);
@@ -256,28 +259,23 @@ public:
 		cr4.fields.vmxe = FALSE;
 		__writecr4(cr4.all);
 
-		VmxCpuContext* vmxCpuContext = getStaticVmxContext();
-		if (vmxCpuContext)
+		VmxCpuContext* currentContext = getCurrentVmxContext();
+		if (currentContext->vmxonRegion)
 		{
-			ULONG index = Util::currentCpuIndex();
-			if (vmxCpuContext[index].vmxonRegion)
-			{
-				ExFreePoolWithTag(vmxCpuContext[index].vmxonRegion, POOL_TAG_VMXON);
-				vmxCpuContext[index].vmxonRegion = NULL;
-			}
-			if (vmxCpuContext[index].vmcsRegion)
-			{
-				ExFreePoolWithTag(vmxCpuContext[index].vmcsRegion, POOL_TAG_VMCS);
-				vmxCpuContext[index].vmcsRegion = NULL;
-			}
-			if (vmxCpuContext[index].vmStackBase)
-			{
-				ExFreePoolWithTag(vmxCpuContext[index].vmStack, POOL_TAG_HOST_STACK);
-				vmxCpuContext[index].vmStack = NULL;
-				vmxCpuContext[index].vmStackBase = NULL;
-			}
+			ExFreePoolWithTag(currentContext->vmxonRegion, POOL_TAG_VMXON);
+			currentContext->vmxonRegion = NULL;
 		}
-
+		if (currentContext->vmcsRegion)
+		{
+			ExFreePoolWithTag(currentContext->vmcsRegion, POOL_TAG_VMCS);
+			currentContext->vmcsRegion = NULL;
+		}
+		if (currentContext->vmStackBase)
+		{
+			ExFreePoolWithTag(currentContext->vmStack, POOL_TAG_HOST_STACK);
+			currentContext->vmStack = NULL;
+			currentContext->vmStackBase = NULL;
+		}
 		return STATUS_SUCCESS;
 
 	}
@@ -351,13 +349,14 @@ private:
 	/**
 	 * 装载vmcs
 	 *
-	 * @param VmxCpuContext * vmxCpuContext:
+	 * @param VmxCpuContext * currentContext:
 	 * @param PVOID guestStack:
 	 * @param PVOID guestResumeRip:
 	 * @return BOOLEAN:
 	 */
-	BOOLEAN setupVmcs(VmxCpuContext* vmxCpuContext, PVOID guestStack, PVOID guestResumeRip)
+	NTSTATUS setupVmcs(VmxCpuContext* currentContext, PVOID guestStack, PVOID guestResumeRip)
 	{
+		NTSTATUS status = STATUS_SUCCESS;
 		Gdtr gdtr = { 0 };
 		Idtr idtr = { 0 };
 		SegmentSelector segmentSelector;
@@ -366,7 +365,6 @@ private:
 		VmxVmEnterControls vmEnterCtlRequested = { 0 };
 		VmxVmExitControls vmExitCtlRequested = { 0 };
 		VmxSecondaryCpuBasedControls vmCpuCtl2Requested = { 0 };
-		VmxCpuContext* currentVcpu = &getStaticVmxContext()[Util::currentCpuIndex()];
 
 		gdtr.base = __getgdtbase();
 		gdtr.limit = __getgdtlimit();
@@ -485,7 +483,7 @@ private:
 		__vmx_vmwrite(HOST_CR4, __readcr4());
 
 		// RSP and RIP
-		__vmx_vmwrite(HOST_RSP, (ULONG_PTR)currentVcpu->vmStackBase);
+		__vmx_vmwrite(HOST_RSP, (ULONG_PTR)currentContext->vmStackBase);
 		__vmx_vmwrite(HOST_RIP, (ULONG_PTR)__vmm_entry_point);
 
 		// Selector fileds
@@ -586,7 +584,7 @@ private:
 		// 6.虚拟机退出信息域 (VM-exit information fields)
 		//
 
-		return 1;
+		return status;
 	}
 
 	/**
@@ -683,13 +681,30 @@ private:
 		return ctl;
 	}
 
-	
+
 
 public:
-	static VmxCpuContext*& getStaticVmxContext()
+	/**
+	 * 获取全局VmxContext对象数组的指针
+	 *
+	 * @return VmxCpuContext**:
+	 */
+	static VmxCpuContext** getStaticVmxContext()
 	{
 		static VmxCpuContext* vmxCpuContext = nullptr;
-		return vmxCpuContext;
+		return &vmxCpuContext;
+	}
+
+	/**
+	 * 获取当前VmxContext对象的地址
+	 *
+	 * @return VmxCpuContext*:
+	 */
+	static VmxCpuContext* getCurrentVmxContext()
+	{
+		VmxCpuContext** vmxCpuContext = VmxManager::getStaticVmxContext();
+		VmxCpuContext* currentCpuContext = &(*vmxCpuContext)[Util::currentCpuIndex()];
+		return currentCpuContext;
 	}
 private:
 	Ept ept;

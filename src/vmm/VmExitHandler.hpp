@@ -4,6 +4,7 @@
 #include <intrin.h>
 #include "asm.h"
 #include "VmxManager.hpp"
+#include "PageAccessManager.hpp"
 
 class VmExitHandler
 {
@@ -221,7 +222,7 @@ private:
 	{
 		LARGE_INTEGER msrValue = { 0 };
 		ULONG32 msrIndex = pGuestRegisters->rcx;
-		VmxCpuContext* currentCpuContext = &VmxManager::getStaticVmxContext()[Util::currentCpuIndex()];
+		VmxCpuContext* currentCpuContext = VmxManager::getCurrentVmxContext();
 		switch (msrIndex)
 		{
 		case MSR_LSTAR:
@@ -252,7 +253,7 @@ private:
 	{
 		LARGE_INTEGER msrValue = { 0 };
 		ULONG32 msrIndex = pGuestRegisters->rcx;
-		VmxCpuContext* currentCpuContext = &VmxManager::getStaticVmxContext()[Util::currentCpuIndex()];
+		VmxCpuContext* currentCpuContext = VmxManager::getCurrentVmxContext();
 		msrValue.LowPart = (ULONG32)pGuestRegisters->rax;
 		msrValue.HighPart = (ULONG32)pGuestRegisters->rdx;
 		switch (msrIndex)
@@ -298,7 +299,7 @@ private:
 		PageEntry* pageEntry = NULL;
 
 		// 获取全局PageEntry对象
-		PageEntry* staticPageEntry = Ept::getStaticPageEntry();
+		PageEntry* staticPageEntry = PageAccessManager::getStaticPageEntry();
 
 		// GuestPhysicalAddress 是出错的地址,而 GuestRip 是导致出错的指令的地址
 		// 如,地址 0x123456 为不可读的页面,而 0x654321 处尝试去读 0x123456 所在的页
@@ -314,7 +315,7 @@ private:
 		for (LIST_ENTRY* pLink = staticPageEntry->pageList.Flink; pLink != (PLIST_ENTRY)&staticPageEntry->pageList; pLink = pLink->Flink)
 		{
 			PageEntry* tempPgEntry = CONTAINING_RECORD(pLink, PageEntry, pageList);
-			ULONG_PTR pageAddressHeadPa = (ULONG_PTR)PAGE_ALIGN((PVOID)Util::vaToPa((PVOID)tempPgEntry->pageAddressVa));
+			ULONG_PTR pageAddressHeadPa = (ULONG_PTR)PAGE_ALIGN((PVOID)Util::vaToPa((PVOID)tempPgEntry->targetPageAddress));
 			ULONG_PTR guestAddressHeadPa = (ULONG_PTR)PAGE_ALIGN(guestPhysicalAddress);
 			if (pageAddressHeadPa == guestAddressHeadPa)
 			{
