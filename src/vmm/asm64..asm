@@ -50,56 +50,78 @@ ENDM
 
 .code
 
+
 ; 启动Vmx
 __vmlaunch PROC
-pushfq
-PUSHAQ
-mov rcx, rsp
-mov rdx, VmLaunchToGuest
-sub rsp, 20h
-call launchVmx
-; int 3
-add rsp, 20h
-POPAQ
-popfq
-mov rax, 0C0000001h; STATUS_UNSUCCESSFUL == 0xC0000001
-ret
+	pushfq ;保存flags
+	PUSHAQ ;保存通用寄存器
+	mov rax, rcx			; rcx=VmxManager::launchVmx, rdx=vcpu
+	mov rcx, rdx			; arg0:vcpu
+	mov rdx, rsp			; arg1:guest rsp
+	mov r8,	VmLaunchToGuest	; arg2:guest rip:VmLaunchToGuest 恢复到guest继续执行的rip
+	sub rsp, 200h			; 提升栈顶，给一些局部变量分配足够的栈空间
+	call rax				; 调用VmxManager::launchVmx
+	; int 3
+	add rsp, 200h			; 当运行到这里则说明vmlaunch失败了,所以手动恢复栈空间
+	POPAQ
+	popfq
+	mov rax, 0C0000001h		; STATUS_UNSUCCESSFUL == 0xC0000001
+	ret
 VmLaunchToGuest :
-POPAQ
-popfq
-xor rax, rax; STATUS_SUCESS == 0
-ret
+	POPAQ ;由于恢复到guest后,vmm会读取并恢复GUEST_RSP,所以无需再手动平衡上面提升的栈顶
+	popfq
+	xor rax, rax			; STATUS_SUCESS == 0
+	ret
 __vmlaunch ENDP
 
 
 ; Vmm入口点
 __vmm_entry_point PROC
-; int 3
-mov vmmEntryRcx, rcx
-mov vmmEntryRdx, rdx
-PUSHAQ ;将通用寄存器压栈(rsp, rip, rflags等寄存器会被保存在guest state area里)
-pushfq
-mov rcx, rsp; 将rsp当作参数, 来访问上一步压入栈的寄存器
-sub rsp, 50h
-call vmExitEntryPoint
-add rsp, 50h
-test rax, rax
-jz __vmxoff
-popfq
-POPAQ
-vmresume
-int 3; vmresume后会跳到guestRip, 正常情况下不会执行这条指令
+	; int 3
+	;mov vmmEntryRcx, rcx
+	;mov vmmEntryRdx, rdx
+	PUSHAQ					;将通用寄存器压栈(rsp, rip, rflags等寄存器会被保存在guest state area里)
+	pushfq					;保存rflags
+	;call currentCpuContext
+	;mov rcx, rax
+	mov rcx, rsp			; 将rsp当作参数, 来访问上一步压入栈的寄存器
+	sub rsp, 200h
+	call vmExitEntryPoint
+	add rsp, 200h
+	test rax, rax
+	jz ExitVmx
+	popfq
+	POPAQ
+	sti
+	vmresume
+	jmp ErrorHandler		 ;vmresume后会跳到guestRip, 正常情况下不会执行这条指令
+
+ExitVmx:
+    
+	popfq
+	POPAQ
+	vmxoff						;执行完后rax=rflags,rdx=原来的栈,rcx=导致vmexit的下一条指令地址
+	jz ErrorHandler             ; if VmfailInvalid(ZF) jmp  see 30.2 Operation sections for the VMX instructions
+    jc ErrorHandler             ; if VmfailValid(CF) jmp
+	                            ; handleVmcall rcx=return address, rdx=guest rsp, r8=guest rflags
+	push r8                     
+	popfq						; r8=rflags
+	mov rsp, rdx				; 恢复执行vmcall前的rsp
+	push rcx 					; rcx为return address, 为vmcall的下一条指令的地址
+	ret
+ErrorHandler:
+	int 3
 __vmm_entry_point ENDP
 
-__vmxoff PROC
-popfq
-POPAQ
-vmxoff
-push[rdx]
-popfq; rflags
-mov rsp, [rdx + 8]; rsp
-jmp qword ptr[rdx + 10h]; rip
-__vmxoff ENDP
+;__vmxoff PROC
+;popfq
+;POPAQ
+;vmxoff
+;push[rdx]
+;popfq; rflags
+;mov rsp, [rdx + 8]; rsp
+;jmp qword ptr[rdx + 10h]; rip
+;__vmxoff ENDP
 
 
 __readcs PROC

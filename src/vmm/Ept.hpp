@@ -71,20 +71,15 @@ public:
 	//目标页所对应的pte
 	EptEntry* pte;
 
-	//ULONG_PTR readPage;
-	//ULONG_PTR writePage;
-	//ULONG_PTR excutePage;
+	ULONG_PTR readPage;
+	ULONG_PTR writePage;
+	ULONG_PTR executePage;
 };
 
 class Ept
 {
 public:
-	Ept()
-	{
-		this->eptCtrl = { 0 };
-		this->pageEntry = { 0 };
-		InitializeListHead(&pageEntry.pageList);
-	}
+
 	/**
 	 * 开启Ept
 	 *
@@ -92,7 +87,6 @@ public:
 	 */
 	NTSTATUS enable()
 	{
-		DbgBreakPoint();
 		NTSTATUS status = STATUS_SUCCESS;
 		EptPointer eptp = { 0 };
 		VmxCpuBasedControls primary = { 0 };
@@ -267,20 +261,25 @@ public:
 
 		// 记录目标地址, 目标页首地址, 目标页所在的pte, 以及用于替换的假页面
 		newPageEntry->targetAddress = (ULONG_PTR)targetAddress;
-		newPageEntry->targetPageAddress = (ULONG_PTR)PAGE_ALIGN(targetAddress);	
+		newPageEntry->targetPageAddress = (ULONG_PTR)PAGE_ALIGN(targetAddress);
 		newPageEntry->pte = Ept::getPtEntry(eptCtrl.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(targetAddress)).QuadPart);
 		newPageEntry->shadowPageAddress = (ULONG_PTR)ExAllocatePoolWithTag(NonPagedPool, PAGE_SIZE, 'fake');
 		if (!newPageEntry->shadowPageAddress)
 		{
 			return STATUS_MEMORY_NOT_ALLOCATED;
 		}
-		RtlMoveMemory((PVOID)newPageEntry->shadowPageAddress, (PVOID)newPageEntry->targetPageAddress, PAGE_SIZE);	
+		RtlMoveMemory((PVOID)newPageEntry->shadowPageAddress, (PVOID)newPageEntry->targetPageAddress, PAGE_SIZE);
 
-		// 给假页面对应的pte读写权限
+		// 分别配置供guest读,写,执行的页面
+		newPageEntry->readPage = newPageEntry->shadowPageAddress;
+		newPageEntry->writePage = newPageEntry->shadowPageAddress;
+		newPageEntry->executePage = newPageEntry->targetPageAddress;
+
+		// 给供guest读写的假页面对应的pte读写权限
 		status = setPageAccess(newPageEntry->shadowPageAddress, (EptAccess)(EptAccess::Read | EptAccess::Write));
 		NT_CHECK();
 
-		// 给予真实页面只执行的权限
+		// 给予供guest执行代码的真实页面只执行的权限
 		status = setPageAccess(newPageEntry->targetPageAddress, EptAccess::Execute);
 		NT_CHECK();
 
@@ -291,11 +290,11 @@ public:
 
 	/**
 	 * 恢复页面
-	 *      
-	 * @param PVOID targetAddress: 
-	 * @return NTSTATUS: 
+	 *
+	 * @param PVOID targetAddress:
+	 * @return NTSTATUS:
 	 */
-	 NTSTATUS recoverPage(PVOID targetAddress)
+	NTSTATUS recoverPage(PVOID targetAddress)
 	{
 		NTSTATUS status = STATUS_SUCCESS;
 		for (LIST_ENTRY* pLink = this->pageEntry.pageList.Flink; pLink != (PLIST_ENTRY)&this->pageEntry.pageList.Flink; pLink = pLink->Flink)
@@ -303,12 +302,12 @@ public:
 			PageEntry* tempPageEntry = CONTAINING_RECORD(pLink, PageEntry, pageList);
 			if (tempPageEntry->targetPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
 			{
-				
+
 				ExFreePoolWithTag((PVOID)tempPageEntry->shadowPageAddress, 'fake');
 				status = setPageAccess((ULONG_PTR)targetAddress, EptAccess::All);
 				NT_CHECK();
 
-				RemoveHeadList();
+				RemoveHeadList(&this->pageEntry.pageList);
 			}
 		}
 	}
@@ -354,8 +353,26 @@ private:
 	}
 
 public:
+	static Ept& instance()
+	{
+		static Ept ept;
+		return ept;
+	}
+	PageEntry* getPageEntry()
+	{
+		return &this->pageEntry;
+	}
+
+private:
+	Ept()
+	{
+		this->eptCtrl = { 0 };
+		this->pageEntry = { 0 };
+		InitializeListHead(&pageEntry.pageList);
+	}
 
 private:
 	EptControl eptCtrl;
 	PageEntry pageEntry;
+
 };

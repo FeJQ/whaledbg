@@ -1,9 +1,10 @@
 #pragma once
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <ntddk.h>
+#include <intrin.h>
 
-#define override
 
 #ifdef _DEBUG
 #define DbgLog(logLevel,...) {Common::log(__FUNCTION__,logLevel,__VA_ARGS__);}
@@ -59,14 +60,16 @@ public:
 			break;
 		}
 #ifdef _DEBUG
-		char message[256] = { 0 };
-		char finalBuff[256] = { 0 };
+		const int LOG_SIZE = 256;
+		char message[LOG_SIZE] = { 0 };
+		const char* formatValue = format;
+		int argCount = 1;
 		va_list va;
 		va_start(va, format);
-		vsprintf_s(message, format, va);
+		vsprintf(message, format, va);
 		va_end(va);
-		sprintf(finalBuff, "[WhaleDbg::%s] %s%s", functionName, levelHeader, message);
-		KdPrint((message));
+		//sprintf(finalBuff, "[WhaleDbg::%s] %s%s", functionName, levelHeader, message);
+		DbgPrint("[WhaleDbg::%s] %s%s\n", levelHeader, message);
 #endif	
 		return;
 	}

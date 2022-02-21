@@ -27,7 +27,10 @@
     <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Vmx.cpp">
+    <ClCompile Include="VmxWarrperC.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="global.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -41,9 +44,6 @@
     <ClInclude Include="VmxManager.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="SvmManager.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="IA32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -53,10 +53,19 @@
     <ClInclude Include="Ept.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Vmx.h">
+    <ClInclude Include="VmxWarrperC.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="VmExitHandler.hpp">
+    <ClInclude Include="VmExitCustomHandler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PageAccessManager.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VmExitPassHandler.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="global.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -64,5 +73,10 @@
     <MASM Include="asm64..asm">
       <Filter>Header Files</Filter>
     </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="VmExitHandler.hpp">
+      <Filter>Header Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

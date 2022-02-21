@@ -18,7 +18,7 @@
     <Configuration>Debug</Configuration>
     <Platform Condition="'$(Platform)' == ''">Win32</Platform>
     <RootNamespace>vmm</RootNamespace>
-    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -28,6 +28,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>KMDF</DriverType>
     <DriverTargetPlatform>Desktop</DriverTargetPlatform>
+    <Driver_SpectreMitigation>Spectre</Driver_SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <TargetVersion>Windows7</TargetVersion>
@@ -36,6 +37,7 @@
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>KMDF</DriverType>
     <DriverTargetPlatform>Desktop</DriverTargetPlatform>
+    <Driver_SpectreMitigation>Spectre</Driver_SpectreMitigation>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -49,25 +51,45 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <OutDir>$(SolutionDir)build\$(TargetName)\$(ConfigurationName)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(TargetName)\temp\$(ConfigurationName)\</IntDir>
+    <IntDir>$(SolutionDir)build\$(TargetName)\$(ConfigurationName)\temp\</IntDir>
+    <LibraryPath>$(SolutionDir)sdk\lib\;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)sdk\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <OutDir>$(SolutionDir)build\$(TargetName)\$(ConfigurationName)\</OutDir>
-    <IntDir>$(SolutionDir)build\$(TargetName)\temp\$(ConfigurationName)\</IntDir>
+    <IntDir>$(SolutionDir)build\$(TargetName)\$(ConfigurationName)\temp\</IntDir>
+    <LibraryPath>$(SolutionDir)sdk\lib\;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)sdk\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <PreprocessorDefinitions>_DEBUG;_WIN64;_AMD64_;AMD64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <WarningLevel>Level3</WarningLevel>
       <TreatWarningAsError>false</TreatWarningAsError>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>Default</LanguageStandard_C>
+      <SDLCheck>false</SDLCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
     </ClCompile>
+    <Link>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <TreatWarningAsError>false</TreatWarningAsError>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>Default</LanguageStandard_C>
+      <SDLCheck>false</SDLCheck>
+      <BufferSecurityCheck>true</BufferSecurityCheck>
     </ClCompile>
+    <Link>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <Inf Include="vmm.inf" />
@@ -76,8 +98,9 @@
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="global.cpp" />
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="Vmx.cpp" />
+    <ClCompile Include="VmxWarrperC.cpp" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="asm64..asm">
@@ -89,14 +112,19 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </MASM>
     <ClInclude Include="asm.h" />
+    <ClInclude Include="global.h" />
+    <ClInclude Include="VmExitPassHandler.hpp" />
     <ClInclude Include="Common.hpp" />
     <ClInclude Include="Ept.hpp" />
     <ClInclude Include="IA32.h" />
-    <ClInclude Include="SvmManager.h" />
+    <ClInclude Include="PageAccessManager.hpp" />
     <ClInclude Include="Util.hpp" />
-    <ClInclude Include="VmExitHandler.hpp" />
-    <ClInclude Include="Vmx.h" />
+    <ClInclude Include="VmExitCustomHandler.hpp" />
+    <ClInclude Include="VmxWarrperC.h" />
     <ClInclude Include="VmxManager.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="VmExitHandler.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

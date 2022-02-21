@@ -9,16 +9,22 @@
 #define POOL_TAG_VMXON 'vmon'
 #define POOL_TAG_VMCS 'vmcs'
 #define POOL_TAG_HOST_STACK 'hstk'
-
+#include "global.h"
 
 
 class VmxManager
 {
 public:
+	VmxManager() = default;
+
+	static VmxManager& instance()
+	{
+		static VmxManager vmxManager;
+		return vmxManager;
+	}
 
 	/**
 	 * 检查Vmx是否可用
-	 *
 	 * @return NTSTATUS:
 	 */
 	NTSTATUS checkVmxAvailable()
@@ -78,7 +84,6 @@ public:
 
 	/**
 	 * 检查Ept是否可用
-	 *
 	 * @return override bool:
 	 */
 	NTSTATUS checkEptAvailable()
@@ -109,12 +114,9 @@ public:
 
 	/**
 	 * 开启vmx标志
-	 *
-	 * @param void * arg1:
-	 * @param void * arg2:
-	 * @return override NTSTATUS:
+	 * @return NTSTATUS:
 	 */
-	static NTSTATUS enableVmxFeature(void* arg1, void* arg2)
+	static NTSTATUS enableVmxFeature()
 	{
 		//开启cr4.vmxe
 		Cr4 cr4 = { 0 };
@@ -143,92 +145,90 @@ public:
 
 	/**
 	 * 申请Vmx域空间
-	 *
+	 * @param Vcpu* vcpu
 	 * @return NTSTATUS:
 	 */
-	NTSTATUS allocateVmxRegion()
+	NTSTATUS allocVcpu(Vcpu* vcpu)
 	{
-		VmxCpuContext** vmxCpuContext = getStaticVmxContext();
-		DbgBreakPoint();
-		*vmxCpuContext = (VmxCpuContext*)Util::alloc(sizeof(VmxCpuContext) * Util::getCpuCount());
+		PVOID pVmxonRegion;
+		PVOID pVmcsRegion;
+		PVOID pVmStack;
 
-		for (ULONG i = 0; i < Util::getCpuCount(); i++)
+		pVmxonRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMXON); //4KB
+		if (!pVmxonRegion)
 		{
-			PVOID pVmxonRegion;
-			PVOID pVmcsRegion;
-			PVOID pVmStack;
-
-			pVmxonRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMXON); //4KB
-			if (!pVmxonRegion)
-			{
-				DbgLog(Common::LogLevel::Error, "Allocate vmxon memory failed.");
-				return STATUS_MEMORY_NOT_ALLOCATED;
-			}
-			RtlZeroMemory(pVmxonRegion, 0x1000);
-
-			pVmcsRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMCS);
-			if (!pVmcsRegion)
-			{
-				DbgLog(Common::LogLevel::Error, "Allocate vmcs memory failed.");
-				ExFreePoolWithTag(pVmxonRegion, 0x1000);
-				return STATUS_MEMORY_NOT_ALLOCATED;
-			}
-			RtlZeroMemory(pVmcsRegion, 0x1000);
-
-			pVmStack = ExAllocatePoolWithTag(NonPagedPool, KERNEL_STACK_SIZE, POOL_TAG_HOST_STACK);
-			if (!pVmStack)
-			{
-				DbgLog(Common::LogLevel::Error, "Allocate host stack memory failed.");
-				ExFreePoolWithTag(pVmxonRegion, 0x1000);
-				ExFreePoolWithTag(pVmcsRegion, 0x1000);
-				return STATUS_MEMORY_NOT_ALLOCATED;
-			}
-			RtlZeroMemory(pVmStack, KERNEL_STACK_SIZE);
-
-			DbgLog(Common::LogLevel::Info, "Vmxon region:0x%08X.", pVmxonRegion);
-			DbgLog(Common::LogLevel::Info, "Vmcs region:0x%08X.", pVmcsRegion);
-			DbgLog(Common::LogLevel::Info, "Host stack region:0x%08X.", pVmStack);
-
-			(*vmxCpuContext)[i].vmxonRegion = pVmxonRegion;
-			(*vmxCpuContext)[i].vmcsRegion = pVmcsRegion;
-			(*vmxCpuContext)[i].vmStack = pVmStack;
-			(*vmxCpuContext)[i].vmStackBase = (CHAR*)pVmStack + KERNEL_STACK_SIZE;
+			DbgLog(Common::LogLevel::Error, "Allocate vmxon memory failed.");
+			return STATUS_MEMORY_NOT_ALLOCATED;
 		}
+		RtlZeroMemory(pVmxonRegion, 0x1000);
+
+		pVmcsRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMCS);
+		if (!pVmcsRegion)
+		{
+			DbgLog(Common::LogLevel::Error, "Allocate vmcs memory failed.");
+			ExFreePoolWithTag(pVmxonRegion, 0x1000);
+			return STATUS_MEMORY_NOT_ALLOCATED;
+		}
+		RtlZeroMemory(pVmcsRegion, 0x1000);
+
+		pVmStack = ExAllocatePoolWithTag(NonPagedPool, KERNEL_STACK_SIZE, POOL_TAG_HOST_STACK);
+		if (!pVmStack)
+		{
+			DbgLog(Common::LogLevel::Error, "Allocate host stack memory failed.");
+			ExFreePoolWithTag(pVmxonRegion, 0x1000);
+			ExFreePoolWithTag(pVmcsRegion, 0x1000);
+			return STATUS_MEMORY_NOT_ALLOCATED;
+		}
+		RtlZeroMemory(pVmStack, KERNEL_STACK_SIZE);
+
+		DbgLog(Common::LogLevel::Info, "Vmxon region:0x%08X.", pVmxonRegion);
+		DbgLog(Common::LogLevel::Info, "Vmcs region:0x%08X.", pVmcsRegion);
+		DbgLog(Common::LogLevel::Info, "Host stack region:0x%08X.", pVmStack);
+
+		vcpu->vmxonRegion = pVmxonRegion;
+		vcpu->vmcsRegion = pVmcsRegion;
+		vcpu->vmmStack = pVmStack;
+		vcpu->vmmStackBase = (CHAR*)pVmStack + KERNEL_STACK_SIZE;
 		return STATUS_SUCCESS;
 	}
 
+	
+
+
 	/**
 	 * 启动vmx
-	 *
-	 * @param PVOID guestStack:
-	 * @param PVOID guestResumeRip:
+	 * @param Vcpu* vcpu:
 	 * @return NTSTATUS:
 	 */
-	NTSTATUS launchVmx(PVOID guestStack, PVOID guestResumeRip)
+	static NTSTATUS launchVmx(Vcpu* vcpu,PVOID guestRsp, PVOID guestRip)
 	{
 		NTSTATUS status;
 		DbgBreakPoint();
 
-		VmxCpuContext* currentContext = getCurrentVmxContext();
+		Vcpu* currentVcpu = &vcpu[Util::currentCpuIndex()];
+
+		currentVcpu->guestState.contextFrame.Rsp = (ULONG_PTR)guestRsp;
+		currentVcpu->guestState.contextFrame.Rip = (ULONG_PTR)guestRip;
 
 		//开启Root模式
-		status = enableRoot(currentContext);
+		status = VmxManager::instance().enableRoot(currentVcpu);
 		NT_CHECK(status);
 
-		currentContext->isVmxEnable = TRUE;
+		currentVcpu->isVmxEnable = TRUE;
 
 		//设置VMCS 
 		//DbgBreakPoint();
-		status = setupVmcs(currentContext, guestStack, guestResumeRip);
+		status = VmxManager::instance().setupVmcs(currentVcpu);
 		NT_CHECK(status);
 
-		ept.enable();
+		Ept::instance().enable();
 
 		//开启虚拟机
 		__vmx_vmlaunch();
 
 		// See:30.4 VM Instruction Error Numbers
 		int error = 0;
+		DbgBreakPoint();
 		if (__vmx_vmread(VM_INSTRUCTION_ERROR, (size_t*)&error) != 0)
 		{
 			DbgLog(Common::LogLevel::Error, "read error code failed");
@@ -240,7 +240,6 @@ public:
 
 	/**
 	 * 退出vmroot
-	 *
 	 * @return NTSTATUS:
 	 */
 	static NTSTATUS quitVmx()
@@ -250,8 +249,8 @@ public:
 		//以Guest身份执行vmoff会导致26号vmexit
 		//__vmx_off();
 
-		VmxoffContext context = { 0 };
-		__vmcall(VmcallReason::VmcallVmxOff, &context);
+		VmcallParam param = { 0 };
+		__vmcall(VmcallNumber::Exit, &param);
 
 
 		//Cr4.VMXE置0
@@ -259,23 +258,7 @@ public:
 		cr4.fields.vmxe = FALSE;
 		__writecr4(cr4.all);
 
-		VmxCpuContext* currentContext = getCurrentVmxContext();
-		if (currentContext->vmxonRegion)
-		{
-			ExFreePoolWithTag(currentContext->vmxonRegion, POOL_TAG_VMXON);
-			currentContext->vmxonRegion = NULL;
-		}
-		if (currentContext->vmcsRegion)
-		{
-			ExFreePoolWithTag(currentContext->vmcsRegion, POOL_TAG_VMCS);
-			currentContext->vmcsRegion = NULL;
-		}
-		if (currentContext->vmStackBase)
-		{
-			ExFreePoolWithTag(currentContext->vmStack, POOL_TAG_HOST_STACK);
-			currentContext->vmStack = NULL;
-			currentContext->vmStackBase = NULL;
-		}
+		
 		return STATUS_SUCCESS;
 
 	}
@@ -283,11 +266,10 @@ public:
 private:
 	/**
 	 * 开启Root模式,执行vmxon,激活VMCS
-	 *
 	 * @param VmxContext * vmxContext:
 	 * @return NTSTATUS:
 	 */
-	NTSTATUS enableRoot(VmxCpuContext* vmxCpuContext)
+	NTSTATUS enableRoot(Vcpu* vcpu)
 	{
 		Cr0 cr0;
 		Cr4 cr4;
@@ -312,13 +294,13 @@ private:
 		basicMsr.all = __readmsr(MSR_IA32_VMX_BASIC);
 
 		// See: 31.5 VMM setup 
-		*(ULONG*)vmxCpuContext->vmxonRegion = basicMsr.fields.revision_identifier;
+		*(ULONG*)vcpu->vmxonRegion = basicMsr.fields.revision_identifier;
 
 		// See: 24.2 Format of the VMCX region
-		*(ULONG*)vmxCpuContext->vmcsRegion = basicMsr.fields.revision_identifier;
+		*(ULONG*)vcpu->vmcsRegion = basicMsr.fields.revision_identifier;
 
 		//vmxon
-		tmpVmxonRegionPa = Util::vaToPa(vmxCpuContext->vmxonRegion);
+		tmpVmxonRegionPa = Util::vaToPa(vcpu->vmxonRegion);
 		uRet = __vmx_on(&tmpVmxonRegionPa);
 		if (uRet != 0)
 		{
@@ -327,7 +309,7 @@ private:
 		}
 
 		//vmclear
-		tmpVmcsRegionPa = Util::vaToPa(vmxCpuContext->vmcsRegion);
+		tmpVmcsRegionPa = Util::vaToPa(vcpu->vmcsRegion);
 		uRet = __vmx_vmclear(&tmpVmcsRegionPa);
 		if (uRet != 0)
 		{
@@ -336,7 +318,7 @@ private:
 		}
 
 		//vmptrld
-		tmpVmcsRegionPa = Util::vaToPa(vmxCpuContext->vmcsRegion);
+		tmpVmcsRegionPa = Util::vaToPa(vcpu->vmcsRegion);
 		uRet = __vmx_vmptrld(&tmpVmcsRegionPa);
 		if (uRet != 0)
 		{
@@ -348,13 +330,10 @@ private:
 
 	/**
 	 * 装载vmcs
-	 *
-	 * @param VmxCpuContext * currentContext:
-	 * @param PVOID guestStack:
-	 * @param PVOID guestResumeRip:
+	 * @param Vcpu * vcpu:
 	 * @return BOOLEAN:
 	 */
-	NTSTATUS setupVmcs(VmxCpuContext* currentContext, PVOID guestStack, PVOID guestResumeRip)
+	NTSTATUS setupVmcs(Vcpu* vcpu)
 	{
 		NTSTATUS status = STATUS_SUCCESS;
 		Gdtr gdtr = { 0 };
@@ -391,9 +370,9 @@ private:
 		__vmx_vmwrite(GUEST_DR7, __readdr(7));
 
 		//RSP,RIP and RFLAGS
-		__vmx_vmwrite(GUEST_RSP, (ULONG_PTR)guestStack);
-		__vmx_vmwrite(GUEST_RIP, (ULONG_PTR)guestResumeRip);
-		__vmx_vmwrite(GUEST_RFLAGS, __readeflags());
+		__vmx_vmwrite(GUEST_RSP, (ULONG_PTR)vcpu->guestState.contextFrame.Rsp);
+		__vmx_vmwrite(GUEST_RIP, (ULONG_PTR)vcpu->guestState.contextFrame.Rip);
+		__vmx_vmwrite(GUEST_RFLAGS, __readeflags() & ~0x200);//cli
 
 		//Selector,Base address,Segment limit,Access rights for each of following registers:
 		//CS,SS,DS,ES,FS,GS,LDTR and TR
@@ -483,7 +462,7 @@ private:
 		__vmx_vmwrite(HOST_CR4, __readcr4());
 
 		// RSP and RIP
-		__vmx_vmwrite(HOST_RSP, (ULONG_PTR)currentContext->vmStackBase);
+		__vmx_vmwrite(HOST_RSP, (ULONG_PTR)vcpu->vmmStackBase);
 		__vmx_vmwrite(HOST_RIP, (ULONG_PTR)__vmm_entry_point);
 
 		// Selector fileds
@@ -589,7 +568,6 @@ private:
 
 	/**
 	 * 加载段描述符
-	 *
 	 * @param OUT SegmentSelector * segmentSelector:
 	 * @param USHORT selector:
 	 * @param ULONG_PTR gdtBase:
@@ -638,7 +616,6 @@ private:
 
 	/**
 	 * 获取段描述符访问权限
-	 *
 	 * @param USHORT selector: 段选择子
 	 * @return ULONG:
 	 */
@@ -666,7 +643,6 @@ private:
 	 * See:24.6.1 Pin-Base VM-Execution Controls
 	 * vmwrite虚拟机控制域时,有些位必须置为0,有些位必须置为1
 	 * 通过读取相应的MSR寄存器来确定哪些位必须置0,哪些位必须置1
-	 *
 	 * @param ULONG msr:
 	 * @param ULONG ctl:
 	 * @return ULONG:
@@ -684,28 +660,33 @@ private:
 
 
 public:
-	/**
-	 * 获取全局VmxContext对象数组的指针
-	 *
-	 * @return VmxCpuContext**:
-	 */
-	static VmxCpuContext** getStaticVmxContext()
-	{
-		static VmxCpuContext* vmxCpuContext = nullptr;
-		return &vmxCpuContext;
-	}
+	///**
+	// * 获取全局VmxContext对象数组的指针
+	// *
+	// * @return VmxCpuContext**:
+	// */
+	//VmxCpuContext* getStaticVmxContext()
+	//{
+	//	static VmxCpuContext* vmxCpuContext=nullptr;
+	//	if (vmxCpuContext == nullptr)
+	//	{
+	//		int size = sizeof(VmxCpuContext) * Util::getCpuCount();
+	//		vmxCpuContext = (VmxCpuContext*)Util::alloc(size);
+	//		RtlZeroMemory(vmxCpuContext, size);
+	//	}
+	//	return vmxCpuContext;
+	//}
 
-	/**
-	 * 获取当前VmxContext对象的地址
-	 *
-	 * @return VmxCpuContext*:
-	 */
-	static VmxCpuContext* getCurrentVmxContext()
-	{
-		VmxCpuContext** vmxCpuContext = VmxManager::getStaticVmxContext();
-		VmxCpuContext* currentCpuContext = &(*vmxCpuContext)[Util::currentCpuIndex()];
-		return currentCpuContext;
-	}
+	///**
+	// * 获取当前VmxContext对象的地址
+	// *
+	// * @return VmxCpuContext*:
+	// */
+	//VmxCpuContext& getCurrentVmxContext()
+	//{
+	//	VmxCpuContext currentCpuContext = VmxManager::getStaticVmxContext()[Util::currentCpuIndex()];
+	//	return currentCpuContext;
+	//}
 private:
-	Ept ept;
+
 };

@@ -331,8 +331,20 @@ struct Registers64
 	ULONG_PTR rax;
 };
 
-struct VmxCpuContext
+class VmxCpuContext
 {
+public:
+	VmxCpuContext() = default;
+	VmxCpuContext(const VmxCpuContext& other)
+	{
+		this->vmxonRegion = other.vmxonRegion;
+		this->vmcsRegion = other.vmcsRegion;
+		this->vmStack = other.vmStack;
+		this->vmStackBase = other.vmStackBase;
+		this->originalLstar = other.originalLstar;
+		this->newKiSystemCall64 = other.newKiSystemCall64;
+		this->isVmxEnable = other.isVmxEnable;
+	}
 	PVOID vmxonRegion;
 	PVOID vmcsRegion;
 	PVOID vmStack;

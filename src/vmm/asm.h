@@ -4,11 +4,17 @@
 
 EXTERN_C_BEGIN
 
-enum VmcallReason
+enum VmcallNumber
 {
-	VmcallVmxOff = 54886475,
+	Exit = 54886475,
 	VmcallLstarHookEnable,
 	VmcallLstarHookDisable,
+};
+
+struct VmcallParam
+{
+	ULONG_PTR eptHookAddress; // 填写要hook的函数的地址
+
 };
 
 EXTERN_C  PVOID __stdcall __getPebAddress();
@@ -27,12 +33,12 @@ ASM ULONG64 __getidtlimit();
 ASM ULONG64 __getgdtbase();
 ASM ULONG64 __getgdtlimit();
 ASM void __invd();
-ASM void __vmcall(VmcallReason vmcallReason, VmxoffContext* context);
+ASM void __vmcall(VmcallNumber vmcallNumber, VmcallParam* param);
 ASM void __lgdt(void* gdtr);
 ASM void __pushall();
 ASM void __popall();
 
-ASM NTSTATUS __stdcall __vmlaunch(void* arg1, void* arg2);
+ASM NTSTATUS __stdcall __vmlaunch(void* routine,void* vcpu);
 
 ASM void __svreg(Registers64* reg);
 ASM void __ldreg(Registers64* reg);

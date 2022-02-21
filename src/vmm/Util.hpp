@@ -1,16 +1,69 @@
 #pragma once
 #include <ntddk.h>
+#include "Common.hpp"
+
+typedef NTSTATUS(*Routine_t)();
+typedef NTSTATUS(*Routine_t_arg1)(void* arg1);
+typedef NTSTATUS(*Routine_t_arg2)(void* arg1, void* arg2);
+
 class Util
 {
 public:
-	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)())
+	static NTSTATUS performForEachProcessor(Routine_t routine)
 	{
-		return performForEachProcessor(routine);
+		NTSTATUS status = STATUS_SUCCESS;
+		ULONG processorCount = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+		for (ULONG i = 0; i < processorCount; i++)
+		{
+			PROCESSOR_NUMBER processorNumber = { 0 };
+			status = KeGetProcessorNumberFromIndex(i, &processorNumber);
+			if (!NT_SUCCESS(status))
+			{
+				return status;
+			}
+			//切换到i号处理器
+			GROUP_AFFINITY affinity = { 0 };
+			affinity.Group = processorNumber.Group;
+			affinity.Mask = 1ull << processorNumber.Number;
+			GROUP_AFFINITY preAffinity = { 0 };
+			KeSetSystemGroupAffinityThread(&affinity, &preAffinity);
+
+			//执行回调
+			status = routine();
+
+			KeRevertToUserGroupAffinityThread(&preAffinity);
+			NT_CHECK(status);
+		}
+		return STATUS_SUCCESS;
+
 	}
 
-	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)(void* arg), void* context = nullptr)
+	static NTSTATUS performForEachProcessor(Routine_t_arg1 routine, void* context = nullptr)
 	{
-		return performForEachProcessor(routine, context);
+		NTSTATUS status = STATUS_SUCCESS;
+		ULONG processorCount = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+		for (ULONG i = 0; i < processorCount; i++)
+		{
+			PROCESSOR_NUMBER processorNumber = { 0 };
+			status = KeGetProcessorNumberFromIndex(i, &processorNumber);
+			if (!NT_SUCCESS(status))
+			{
+				return status;
+			}
+			//切换到i号处理器
+			GROUP_AFFINITY affinity = { 0 };
+			affinity.Group = processorNumber.Group;
+			affinity.Mask = 1ull << processorNumber.Number;
+			GROUP_AFFINITY preAffinity = { 0 };
+			KeSetSystemGroupAffinityThread(&affinity, &preAffinity);
+
+			//执行回调
+			status = routine(context);
+
+			KeRevertToUserGroupAffinityThread(&preAffinity);
+			NT_CHECK(status);
+		}
+		return STATUS_SUCCESS;
 	}
 	/**
 	 * 在每个处理器上执行routine
@@ -20,7 +73,7 @@ public:
 	 * @param context2: 参数2
 	 * @return NTSTATUS: 状态码
 	 */
-	static NTSTATUS performForEachProcessor(NTSTATUS(*routine)(void* arg1, void* arg2), void* context1 = nullptr, void* context2 = nullptr)
+	static NTSTATUS performForEachProcessor(Routine_t_arg2 routine, void* context1 = nullptr, void* context2 = nullptr)
 	{
 		NTSTATUS status = STATUS_SUCCESS;
 		ULONG processorCount = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
@@ -137,9 +190,9 @@ public:
 	 * 禁用内存保护
 	 *
 	 */
-	static void disableMemoryProtect()
+	static void disableWriteProtect()
 	{
-		_disable();
+		//_disable();
 		__writecr0(__readcr0() & (~(0x10000)));
 	}
 
@@ -147,10 +200,10 @@ public:
 	 * 启用内存保护
 	 *
 	 */
-	static void enableMemoryProtect()
+	static void enableWriteProtect()
 	{
 		__writecr0(__readcr0() ^ 0x10000);
-		_enable();
+		//_enable();
 	}
 
 };
