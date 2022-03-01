@@ -1,6 +1,6 @@
 #pragma once
 #include <ntddk.h>
-#include "Common.hpp"
+#include "Common.h"
 
 typedef NTSTATUS(*Routine_t)();
 typedef NTSTATUS(*Routine_t_arg1)(void* arg1);

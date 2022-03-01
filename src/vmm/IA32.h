@@ -1,5 +1,5 @@
 #pragma once
-#include "Common.hpp"
+#include "Common.h"
 
 
 #define MSR_APIC_BASE                       0x01B
@@ -940,4 +940,3 @@ union ExitQualification
 		ULONG64 reserved3 : 51;					//!< [13:63]
 	} eptViolation;
 };
-

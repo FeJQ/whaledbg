@@ -98,9 +98,14 @@
     <FilesToPackage Include="$(TargetPath)" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Common.cpp" />
+    <ClCompile Include="Ept.cpp" />
     <ClCompile Include="global.cpp" />
     <ClCompile Include="Main.cpp" />
-    <ClCompile Include="VmxWarrperC.cpp" />
+    <ClCompile Include="PageAccessManager.cpp" />
+    <ClCompile Include="Vmcs.cpp" />
+    <ClCompile Include="VmExitHandler.cpp" />
+    <ClCompile Include="VmxManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="asm64..asm">
@@ -112,19 +117,15 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
     </MASM>
     <ClInclude Include="asm.h" />
+    <ClInclude Include="Common.h" />
+    <ClInclude Include="Ept.h" />
     <ClInclude Include="global.h" />
-    <ClInclude Include="VmExitPassHandler.hpp" />
-    <ClInclude Include="Common.hpp" />
-    <ClInclude Include="Ept.hpp" />
+    <ClInclude Include="PageAccessManager.h" />
+    <ClInclude Include="Vmcs.h" />
+    <ClInclude Include="VmExitHandler.h" />
     <ClInclude Include="IA32.h" />
-    <ClInclude Include="PageAccessManager.hpp" />
     <ClInclude Include="Util.hpp" />
-    <ClInclude Include="VmExitCustomHandler.hpp" />
-    <ClInclude Include="VmxWarrperC.h" />
-    <ClInclude Include="VmxManager.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="VmExitHandler.hpp" />
+    <ClInclude Include="VmxManager.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

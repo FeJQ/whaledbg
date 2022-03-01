@@ -1,5 +1,5 @@
 #pragma once
-#include "Common.hpp"
+#include "Common.h"
 #include "IA32.h"
 
 EXTERN_C_BEGIN

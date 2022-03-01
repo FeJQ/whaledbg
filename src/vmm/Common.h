@@ -1,10 +1,8 @@
 #pragma once
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <ntddk.h>
 #include <intrin.h>
-
 
 #ifdef _DEBUG
 #define DbgLog(logLevel,...) {Common::log(__FUNCTION__,logLevel,__VA_ARGS__);}

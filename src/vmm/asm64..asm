@@ -68,6 +68,7 @@ __vmlaunch PROC
 	mov rax, 0C0000001h		; STATUS_UNSUCCESSFUL == 0xC0000001
 	ret
 VmLaunchToGuest :
+	int 3
 	POPAQ ;由于恢复到guest后,vmm会读取并恢复GUEST_RSP,所以无需再手动平衡上面提升的栈顶
 	popfq
 	xor rax, rax			; STATUS_SUCESS == 0
