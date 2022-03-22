@@ -6,7 +6,7 @@
 
 EXTERN_C_BEGIN
 
-using namespace whaledbg::vmm;
+using namespace vmm;
 
 void DriverUnload(PDRIVER_OBJECT pDriver)
 {
@@ -54,6 +54,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 	pDriver->DriverUnload = DriverUnload;
 	NTSTATUS status = STATUS_SUCCESS;
 
+	
 	DbgLog(Common::LogLevel::Info, "驱动已装载");
 
 	//检查是否支持VMX

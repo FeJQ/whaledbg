@@ -50,7 +50,7 @@ union Pml4Entry
 	}fields;
 };
 
-union EptEntry
+union PteEntry
 {
 	ULONG64 all;
 	struct
@@ -78,7 +78,7 @@ union EptPointer
 };
 struct EptControl
 {
-	EptEntry* pml4t;
+	PteEntry* pml4t;
 };
 
 struct PageEntry
@@ -87,7 +87,7 @@ struct PageEntry
     ULONG_PTR targetAddress;         // 目标地址
     ULONG_PTR pageAddress;           // 目标页首地址
     ULONG_PTR shadowPageAddress;     // 假页页首地址
-    EptEntry* pte;                   // 目标页所对应的pte
+	PteEntry* pte;                   // 目标页所对应的pte
 
     ULONG_PTR readPage;
     ULONG_PTR writePage;

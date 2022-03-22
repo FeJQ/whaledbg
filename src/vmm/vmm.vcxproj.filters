@@ -1,44 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="Common.cpp" />
-    <ClCompile Include="Ept.cpp" />
-    <ClCompile Include="global.cpp" />
-    <ClCompile Include="Main.cpp" />
-    <ClCompile Include="PageAccessManager.cpp" />
-    <ClCompile Include="Vmcs.cpp" />
-    <ClCompile Include="VmExitHandler.cpp" />
-    <ClCompile Include="VmxManager.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="asm.h" />
-    <ClInclude Include="Common.h" />
-    <ClInclude Include="Ept.h" />
-    <ClInclude Include="global.h" />
-    <ClInclude Include="PageAccessManager.h" />
-    <ClInclude Include="Vmcs.h" />
-    <ClInclude Include="VmExitHandler.h" />
-    <ClInclude Include="IA32.h" />
-    <ClInclude Include="Util.hpp" />
-    <ClInclude Include="VmxManager.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Inf Include="vmm.inf" />
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="asm64..asm" />
-  </ItemGroup>
-</Project>ilter>Driver Files</Filter>
-    </Inf>
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="VmxWarrperC.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="global.cpp">
+    <ClCompile Include="VmxManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="VmExitHandler.cpp">
@@ -47,10 +10,10 @@
     <ClCompile Include="Vmcs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="VmxManager.cpp">
+    <ClCompile Include="PageAccessManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="PageAccessManager.cpp">
+    <ClCompile Include="global.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Ept.cpp">
@@ -59,21 +22,15 @@
     <ClCompile Include="Common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Driver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Log.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Util.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="IA32.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="asm.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VmxWarrperC.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="global.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Common.h">
@@ -82,26 +39,43 @@
     <ClInclude Include="Ept.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="VmExitHandler.h">
+    <ClInclude Include="global.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Vmcs.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="VmxManager.h">
+    <ClInclude Include="IA32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PageAccessManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="VmxManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Vmcs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VmExitHandler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Util.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Log.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="asm64..asm">
-      <Filter>Header Files</Filter>
-    </MASM>
+    <Inf Include="vmm.inf" />
   </ItemGroup>
-</Project>MASM Include="asm64..asm">
-      <Filter>Header Files</Filter>
-    </MASM>
+  <ItemGroup>
+    <MASM Include="asm64..asm" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{e2612e38-5dcb-4e6e-ac30-02618bbb68f4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{32e18841-a011-41f2-b6a2-d0229727e599}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>

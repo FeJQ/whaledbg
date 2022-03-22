@@ -4,8 +4,7 @@
 
 
 
-namespace whaledbg
-{
+
 	namespace vmm
 	{
 		namespace vmcs
@@ -83,4 +82,3 @@ namespace whaledbg
 			NTSTATUS loadSegmentDescriptor(SegmentSelector* segmentSelector, USHORT selector, ULONG_PTR gdtBase);
 		}
 	}
-}

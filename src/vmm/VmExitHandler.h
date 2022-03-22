@@ -2,8 +2,7 @@
 #include "Common.h"
 #include "iA32.h"
 
-namespace whaledbg
-{
+
 	namespace vmm
 	{
 		namespace vmexit
@@ -76,5 +75,5 @@ namespace whaledbg
 			void handleEptMisconfig(Registers64* reg);
 			
 		}
-	}
+	
 }

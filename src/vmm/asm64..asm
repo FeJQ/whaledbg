@@ -53,6 +53,7 @@ ENDM
 
 ; 启动Vmx
 __vmlaunch PROC
+	;int 3
 	pushfq ;保存flags
 	PUSHAQ ;保存通用寄存器
 	mov rax, rcx			; rcx=VmxManager::launchVmx, rdx=vcpu
@@ -61,14 +62,16 @@ __vmlaunch PROC
 	mov r8,	VmLaunchToGuest	; arg2:guest rip:VmLaunchToGuest 恢复到guest继续执行的rip
 	sub rsp, 200h			; 提升栈顶，给一些局部变量分配足够的栈空间
 	call rax				; 调用VmxManager::launchVmx
-	; int 3
+	int 3
 	add rsp, 200h			; 当运行到这里则说明vmlaunch失败了,所以手动恢复栈空间
 	POPAQ
 	popfq
 	mov rax, 0C0000001h		; STATUS_UNSUCCESSFUL == 0xC0000001
 	ret
 VmLaunchToGuest :
-	int 3
+	nop
+	mov rax,1
+	;int 3
 	POPAQ ;由于恢复到guest后,vmm会读取并恢复GUEST_RSP,所以无需再手动平衡上面提升的栈顶
 	popfq
 	xor rax, rax			; STATUS_SUCESS == 0
@@ -78,7 +81,6 @@ __vmlaunch ENDP
 
 ; Vmm入口点
 __vmm_entry_point PROC
-	; int 3
 	;mov vmmEntryRcx, rcx
 	;mov vmmEntryRdx, rdx
 	PUSHAQ					;将通用寄存器压栈(rsp, rip, rflags等寄存器会被保存在guest state area里)
@@ -274,18 +276,28 @@ __ldreg ENDP
 
 UtilEnterCriticalSection PROC
 WaitLab :
-mov eax, 1
-lock xadd[rcx], eax
-cmp eax, 0
-jz EndLab
-lock dec dword ptr[rcx]
-jmp WaitLab
+	mov eax, 1
+	lock xadd[rcx], eax
+	cmp eax, 0
+	jz EndLab
+	lock dec dword ptr[rcx]
+	jmp WaitLab
 EndLab :
-ret
+	ret
 UtilEnterCriticalSection ENDP
 
 UtilDeleteCriticalSection PROC
-lock dec dword ptr[rcx]
+	lock dec dword ptr[rcx]
 UtilDeleteCriticalSection ENDP
+
+__invept PROC
+	invept rcx, oword ptr [rdx]
+    jz invept_break
+    jc invept_break
+	ret
+invept_break:
+    int 3
+    ret
+__invept ENDP
 
 END

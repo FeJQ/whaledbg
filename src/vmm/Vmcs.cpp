@@ -5,8 +5,7 @@
 #include "Util.hpp"
 
 
-namespace whaledbg
-{
+
 	namespace vmm
 	{
 		namespace vmcs
@@ -335,4 +334,3 @@ namespace whaledbg
 			
 		}
 	}
-}
