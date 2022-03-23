@@ -17,7 +17,7 @@
 			/**
 			 * 恢复客户机rip到导致vmexit指令的下一条指令,
 			 */
-			void resume();
+			void resumeToNextInstruction();
 
 			/**
 			 * 执行cpuid指令而导致的vmexit事件的处理函数

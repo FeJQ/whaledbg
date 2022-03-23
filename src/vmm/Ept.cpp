@@ -8,28 +8,24 @@ namespace vmm
 {
 	namespace ept
 	{
-		EptControl eptCtrl = { 0 };
-		LIST_ENTRY pageListHead;
-
+		EptState eptState = { 0 };
 
 		NTSTATUS enable()
 		{
 			NTSTATUS status = STATUS_SUCCESS;
-			EptPointer eptp = { 0 };
 			VmxCpuBasedControls primary = { 0 };
 			VmxSecondaryCpuBasedControls secondary = { 0 };
 
-			//pageEntry = (PageEntry*)ExAllocatePool(NonPagedPool, sizeof(PageEntry));
-			//RtlZeroMemory(&pageEntry, sizeof(PageEntry));
-			InitializeListHead(&pageListHead);
+			InitializeListHead(&eptState.hookedPage.listEntry);
 
-			eptCtrl.pml4t = allocEptMemory();
+			eptState.pml4t = (PteEntry*)allocEptMemory();
+			ASSERT(eptState.pml4t != NULL);
 
 			// Set up the EPTP
-			eptp.fields.physAddr = MmGetPhysicalAddress(eptCtrl.pml4t).QuadPart >> 12;
-			eptp.fields.memoryType = MemoryType::WriteBack;
-			eptp.fields.pageWalkLength = 3;
-			__vmx_vmwrite(EPT_POINTER, eptp.all);
+			eptState.eptp.fields.physAddr = MmGetPhysicalAddress(eptState.pml4t).QuadPart >> 12;
+			eptState.eptp.fields.memoryType = MemoryType::WriteBack;
+			eptState.eptp.fields.pageWalkLength = 3;
+			__vmx_vmwrite(EPT_POINTER, eptState.eptp.all);
 
 			__vmx_vmread(SECONDARY_VM_EXEC_CONTROL, (size_t*)&secondary.all);
 			__vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, (size_t*)&primary.all);
@@ -41,11 +37,12 @@ namespace vmm
 			//PhRootine();
 
 			pam::PASHidePage();
-			
+
 			return status;
 		}
 
-		PteEntry* allocEptMemory()
+
+		PVOID allocEptMemory()
 		{
 			//EPT寻址结构
 			//表名      容量        大小(位)
@@ -60,29 +57,19 @@ namespace vmm
 			PteEntry* pdt = 0;
 			PteEntry* pt = 0;
 
-			const ULONG pm4tCount = 1;
-			const ULONG pdptCount = 1;
-			const ULONG pdtCount = 50;
-			const ULONG ptCount = 512;
-			const ULONG pageCount = 512;
-
-			//ULONG pteCount = pm4tCount * pdptCount * pdtCount * ptCount * pageCount;
-
-
-			//1张PML4T
+			//1张PML4T  EPT_PML4T_COUNT
 			pml4t = (PteEntry*)(ExAllocatePoolWithTag(NonPagedPoolNx, PAGE_SIZE, 'pml4'));
-
 			if (!pml4t)
 			{
-				return 0;
+				return NULL;
 			}
 			RtlZeroMemory(pml4t, PAGE_SIZE);
 
-			//1张PDPT
+			//1张PDPT  EPT_PDPT_COUNT
 			pdpt = (PteEntry*)(ExAllocatePoolWithTag(NonPagedPoolNx, PAGE_SIZE, 'pdpt'));
 			if (!pdpt)
 			{
-				return 0;
+				return NULL;
 			}
 			RtlZeroMemory(pdpt, PAGE_SIZE);
 
@@ -93,31 +80,31 @@ namespace vmm
 			pml4t[0].fields.executeAccess = true;
 			// n张PDT (每一张可以支持1G内存寻址,根据内存容量来,最大512) 
 			// 实际上由于分页内存可以交换到磁盘的缘故,这里申请的张数一定要比实际物理内存的容量要大
-			for (ULONG i = 0; i < pdtCount; i++)
+			for (ULONG i = 0; i < EPT_PDT_COUNT; i++)
 			{
 				pdt = (PteEntry*)(ExAllocatePoolWithTag(NonPagedPoolNx, PAGE_SIZE, 'pdt'));
 				if (!pdt)
 				{
-					return 0;
+					return NULL;
 				}
 				RtlZeroMemory(pdt, PAGE_SIZE);
 				pdpt[i].all = *(ULONG64*)&MmGetPhysicalAddress(pdt);
 				pdpt[i].fields.readAccess = true;
 				pdpt[i].fields.writeAccess = true;
 				pdpt[i].fields.executeAccess = true;
-				for (ULONG j = 0; j < ptCount; j++)
+				for (ULONG j = 0; j < EPT_PT_COUNT; j++)
 				{
 					pt = (PteEntry*)(ExAllocatePoolWithTag(NonPagedPoolNx, PAGE_SIZE, 'pt'));
 					if (!pt)
 					{
-						return 0;
+						return NULL;
 					}
 					RtlZeroMemory(pt, PAGE_SIZE);
 					pdt[j].all = *(ULONG64*)&MmGetPhysicalAddress(pt);
 					pdt[j].fields.readAccess = true;
 					pdt[j].fields.writeAccess = true;
 					pdt[j].fields.executeAccess = true;
-					for (ULONG k = 0; k < pageCount; k++)
+					for (ULONG k = 0; k < EPT_PAGE_COUNT; k++)
 					{
 						pt[k].all = (i * (ULONG64)(1 << 30) + j * (ULONG64)(1 << 21) + k * (ULONG64)(1 << 12));
 						pt[k].fields.readAccess = true;
@@ -127,7 +114,44 @@ namespace vmm
 					}
 				}
 			}
-			return pml4t;
+			return (PVOID)pml4t;
+		}
+
+		NTSTATUS freeEptMemory()
+		{
+			NTSTATUS status = STATUS_SUCCESS;
+			for (LIST_ENTRY* pLink = eptState.hookedPage.listEntry.Flink; pLink != &eptState.hookedPage.listEntry; pLink = pLink->Flink)
+			{
+				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
+				ExFreePoolWithTag((PVOID)tempHookedPage->shadowPageAddress, 'fake');
+				status = setPageAccess((ULONG_PTR)tempHookedPage->hookedPageAddress, EptAccess::All);
+				ASSERT(status == STATUS_SUCCESS);
+				RemoveHeadList(&eptState.hookedPage.listEntry);
+				ExFreePoolWithTag(tempHookedPage, 'hkpg');
+			}
+
+			for (auto i = 0; i < EPT_PML4T_COUNT; i++)
+			{
+				PteEntry* pml4te = (PteEntry*)eptState.pml4t[i].all;
+				for (auto j = 0; j < EPT_PDPT_COUNT; j++)
+				{
+					PteEntry* pdpte = (PteEntry*)pml4te[j].all;
+					for (auto k = 0; k < EPT_PDT_COUNT; k++)
+					{
+						PteEntry* pdte = (PteEntry*)pdpte[k].all;
+						for (auto l = 0; l < EPT_PT_COUNT; l++)
+						{
+							PteEntry* pte = (PteEntry*)pdte[l].all;
+							ExFreePoolWithTag((PVOID)(pte->all & 0xFFFFFFFFFFFFF000ull), 'pt');
+						}
+						ExFreePoolWithTag((PVOID)(pdte->all & 0xFFFFFFFFFFFFF000ull), 'pdt');
+					}
+					ExFreePoolWithTag((PVOID)(pdpte->all & 0xFFFFFFFFFFFFF000ull), 'pdpt');
+				}
+				ExFreePoolWithTag((PVOID)(pml4te->all & 0xFFFFFFFFFFFFF000ull), 'pml4');
+			}
+			RtlZeroMemory(&eptState, sizeof(EptState));
+			return status;
 		}
 
 		PteEntry* getPtEntry(PteEntry* pml4t, ULONG_PTR pa)
@@ -172,95 +196,76 @@ namespace vmm
 		NTSTATUS hidePage(PVOID targetAddress)
 		{
 			NTSTATUS status = STATUS_SUCCESS;
-			// 判断目标页是否已经被权限分离过
-			bool flag = false;
-			for (LIST_ENTRY* pLink = ept::pageListHead.Flink; pLink != &pageListHead; pLink = pLink->Flink)
+			for (LIST_ENTRY* pLink = eptState.hookedPage.listEntry.Flink; pLink != &eptState.hookedPage.listEntry; pLink = pLink->Flink)
 			{
-				PageEntry* tempPageEntry = CONTAINING_RECORD(pLink, PageEntry, pageList);
-				if (tempPageEntry->pageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
+				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
+				if (tempHookedPage->hookedPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
 				{
-					flag = true;
-					break;
+					// 已经Hook过这个页面，所以直接返回成功
+					return STATUS_SUCCESS;
 				}
 			}
-			if (flag != true) return status;
 
-			// 创建新的PageEntry项
-			PageEntry* newPageEntry = (PageEntry*)ExAllocatePoolWithTag(NonPagedPool, sizeof(PageEntry), 'page');
-			if (!newPageEntry)
+			// 创建新的HookedPage项
+			HookedPage* newHookedPage = (HookedPage*)ExAllocatePoolWithTag(NonPagedPool, sizeof(HookedPage), 'hkpg');
+			if (!newHookedPage)
 			{
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
-			//RtlZeroMemory(newPageEntry, sizeof(PageEntry));
+			RtlZeroMemory(newHookedPage, sizeof(HookedPage));
 
-			// 记录目标地址, 目标页首地址, 目标页所在的pte, 以及用于替换的假页面
-			newPageEntry->targetAddress = (ULONG_PTR)targetAddress;
-			newPageEntry->pageAddress = (ULONG_PTR)PAGE_ALIGN(targetAddress);
-			newPageEntry->pte = ept::getPtEntry(eptCtrl.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(targetAddress)).QuadPart);
-			newPageEntry->shadowPageAddress = (ULONG_PTR)ExAllocatePoolWithTag(NonPagedPool, PAGE_SIZE, 'fake');
-			if (!newPageEntry->shadowPageAddress)
+			// 记录目标页首地址, 目标页所在的pte, 以及用于替换的假页面
+			newHookedPage->hookedPageAddress = (ULONG_PTR)PAGE_ALIGN(targetAddress);
+			newHookedPage->pte = ept::getPtEntry(eptState.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(targetAddress)).QuadPart);
+			newHookedPage->shadowPageAddress = (ULONG_PTR)ExAllocatePoolWithTag(NonPagedPool, PAGE_SIZE, 'fake');
+			if (!newHookedPage->shadowPageAddress)
 			{
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
-			RtlMoveMemory((PVOID)newPageEntry->shadowPageAddress, (PVOID)newPageEntry->pageAddress, PAGE_SIZE);
+			RtlMoveMemory((PVOID)newHookedPage->shadowPageAddress, (PVOID)newHookedPage->hookedPageAddress, PAGE_SIZE);
 
 			// 分别配置供guest读,写,执行的页面
-			newPageEntry->readPage = newPageEntry->shadowPageAddress;
-			newPageEntry->writePage = newPageEntry->shadowPageAddress;
-			newPageEntry->executePage = newPageEntry->pageAddress;
+			newHookedPage->readPage = newHookedPage->shadowPageAddress;
+			newHookedPage->writePage = newHookedPage->shadowPageAddress;
+			newHookedPage->executePage = newHookedPage->hookedPageAddress;
 
 			// 给供guest读写的假页面对应的pte读写权限
-			status = setPageAccess(newPageEntry->shadowPageAddress, (EptAccess)(EptAccess::Read | EptAccess::Write));
+			status = setPageAccess(newHookedPage->shadowPageAddress, (EptAccess)(EptAccess::Read | EptAccess::Write));
 			NT_CHECK();
 
 			// 给予供guest执行代码的真实页面只执行的权限
-			status = setPageAccess(newPageEntry->pageAddress, EptAccess::Execute);
+			status = setPageAccess(newHookedPage->hookedPageAddress, EptAccess::Execute);
 			NT_CHECK();
 
 			// 将目标PageEntry添加到page list
-			InsertHeadList(&ept::pageListHead, &newPageEntry->pageList);
+			InsertHeadList(&eptState.hookedPage.listEntry, &newHookedPage->listEntry);
 			return status;
 		}
 
 		NTSTATUS recoverPage(PVOID targetAddress)
 		{
 			NTSTATUS status = STATUS_SUCCESS;
-			for (LIST_ENTRY* pLink = ept::pageListHead.Flink; pLink != &ept::pageListHead; pLink = pLink->Flink)
+			for (LIST_ENTRY* pLink = eptState.hookedPage.listEntry.Flink; pLink != &eptState.hookedPage.listEntry; pLink = pLink->Flink)
 			{
-				PageEntry* tempPageEntry = CONTAINING_RECORD(pLink, PageEntry, pageList);
-				if (tempPageEntry->pageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
+				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
+				if (tempHookedPage->hookedPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
 				{
-
-					ExFreePoolWithTag((PVOID)tempPageEntry->shadowPageAddress, 'fake');
+					ExFreePoolWithTag((PVOID)tempHookedPage->shadowPageAddress, 'fake');
 					status = setPageAccess((ULONG_PTR)targetAddress, EptAccess::All);
-					NT_CHECK();
-
-					RemoveHeadList(&ept::pageListHead);
+					ASSERT(status == STATUS_SUCCESS);
+					RemoveHeadList(&eptState.hookedPage.listEntry);
+					ExFreePoolWithTag(tempHookedPage, 'hkpg');
 				}
 			}
-		}
-
-
-		NTSTATUS separatePageAccess(PageEntry* targetPageEntry, EptAccess eptAccess)
-		{
-			NTSTATUS status = STATUS_SUCCESS;
-
-
-
-			/*PVOID NtLoadDriver = (PVOID)0xFFFFF800043594F0;
-			Util::disableMemoryProtect();
-			*(PCHAR)NtLoadDriver = 0xCC;
-			Util::enableMemoryProtect();*/
-
-			setPageAccess(targetPageEntry->pageAddress, eptAccess);
 			return status;
 		}
+
 
 
 		NTSTATUS setPageAccess(ULONG_PTR pageAddress, EptAccess access)
 		{
 			//获取目标地址对应的pte	
-			PteEntry* pte = ept::getPtEntry(eptCtrl.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(pageAddress)).QuadPart);
+			PteEntry* pte = ept::getPtEntry(eptState.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(pageAddress)).QuadPart);
 			//配置权限
 			pte->fields.readAccess = (access & EptAccess::Read) >> 0;
 			pte->fields.writeAccess = (access & EptAccess::Write) >> 1;
@@ -281,5 +286,8 @@ namespace vmm
 			memset(descriptors, 0, sizeof(descriptors));
 			__invept(static_cast<InveptType>(InveptType::GlobalContext), descriptors);
 		}
+
+
+
 	}
 }

@@ -8,6 +8,9 @@
 	{
 		namespace vmexit
 		{
+			using ept::PteEntry;
+			using ept::HookedPage;
+
 			BOOLEAN vmExitEntryPoint(Registers64* reg)
 			{
 				VmExitInformation exitReson = { 0 };
@@ -34,7 +37,7 @@
 					break;
 				case VmExitReason::Vmcall:
 					continueVmx = handleVmcall(reg);
-					if (continueVmx) resume();
+					if (continueVmx) resumeToNextInstruction();
 					break;
 				case VmExitReason::CrAccess:
 					handleCrAccess(reg);
@@ -62,7 +65,7 @@
 				return continueVmx;
 			}
 
-			void resume()
+			void resumeToNextInstruction()
 			{
 				ULONG instLen = 0;
 				ULONG_PTR rip = 0;
@@ -120,13 +123,13 @@
 				reg->rbx = cpuInfo.rbx;
 				reg->rcx = cpuInfo.rcx;
 				reg->rdx = cpuInfo.rdx;
-				resume();
+				resumeToNextInstruction();
 			}
 
 			void handleInvd(Registers64* reg)
 			{
 				__invd();
-				resume();
+				resumeToNextInstruction();
 			}
 
 			BOOLEAN handleVmcall(Registers64* reg)
@@ -160,8 +163,7 @@
 					__lgdt(&gdtr);
 					__lidt(&idtr);
 
-
-					//跳过VmCall指令
+					// 获取guest的返回地址
 					ULONG instLen = 0;
 					ULONG_PTR rip = 0;
 					__vmx_vmread(GUEST_RIP, &rip);
@@ -249,7 +251,7 @@
 					DbgBreakPoint();
 					break;
 				}
-				resume();
+				resumeToNextInstruction();
 			}
 
 			void handleMsrRead(Registers64* reg)
@@ -268,7 +270,7 @@
 				}
 				reg->rax = msrValue.LowPart;
 				reg->rdx = msrValue.HighPart;
-				resume();
+				resumeToNextInstruction();
 			}
 
 			void handleMsrWrite(Registers64* reg)
@@ -287,7 +289,7 @@
 					__writemsr(msrIndex, msrValue.QuadPart);
 					break;
 				}
-				resume();
+				resumeToNextInstruction();
 			}
 
 			void handleMtf(Registers64* reg)
@@ -322,25 +324,25 @@
 
 				DbgBreakPoint();
 				ULONG_PTR violationAddress = (ULONG_PTR)Util::paToVa(violationPa);
-				PteEntry* pte = ept::getPtEntry(ept::eptCtrl.pml4t, (ULONG_PTR)PAGE_ALIGN(violationPa));
+				PteEntry* pte = ept::getPtEntry(ept::eptState.pml4t, (ULONG_PTR)PAGE_ALIGN(violationPa));
 				
 
-				PageEntry* hookedPageEntry = NULL;
+				HookedPage* hookedPage = NULL;
 
 				// 获取替换过的页面的相关数据
-				for (LIST_ENTRY* pLink = ept::pageListHead.Flink; pLink != &ept::pageListHead; pLink = pLink->Flink)
+				for (LIST_ENTRY* pLink = ept::eptState.hookedPage.listEntry.Flink; pLink != &ept::eptState.hookedPage.listEntry; pLink = pLink->Flink)
 				{
-					PageEntry* tempPgEntry = CONTAINING_RECORD(pLink, PageEntry, pageList);
-					ULONG_PTR hookedPa = Util::vaToPa((PVOID)tempPgEntry->targetAddress);
+					HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
+					ULONG_PTR hookedPa = Util::vaToPa((PVOID)tempHookedPage->hookedPageAddress);
 
 					// 判断发生ept violation的页是否与hooked页为同一个页
 					if ((ULONG_PTR)PAGE_ALIGN(violationPa) == (ULONG_PTR)PAGE_ALIGN(hookedPa))
 					{
-						hookedPageEntry = tempPgEntry;
+						hookedPage = tempHookedPage;
 						break;
 					}
 				}
-				if (hookedPageEntry == NULL)
+				if (hookedPage == NULL)
 				{
 					DbgBreakPoint();
 					return;
@@ -349,29 +351,29 @@
 				if (data.eptViolation.readAccess)
 				{
 					// 读不可读的内存页导致的vmexit		
-					hookedPageEntry->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPageEntry->readPage));
-					hookedPageEntry->pte->fields.readAccess = true;
-					hookedPageEntry->pte->fields.writeAccess = true;
-					hookedPageEntry->pte->fields.executeAccess = false;
+					hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->readPage));
+					hookedPage->pte->fields.readAccess = true;
+					hookedPage->pte->fields.writeAccess = true;
+					hookedPage->pte->fields.executeAccess = false;
 				}
 				else if (data.eptViolation.writeAccess)
 				{
 					// 写不可写的内存页导致的vmexit	
-					hookedPageEntry->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPageEntry->writePage));
-					hookedPageEntry->pte->fields.readAccess = true;
-					hookedPageEntry->pte->fields.writeAccess = true;
-					hookedPageEntry->pte->fields.executeAccess = false;
+					hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->writePage));
+					hookedPage->pte->fields.readAccess = true;
+					hookedPage->pte->fields.writeAccess = true;
+					hookedPage->pte->fields.executeAccess = false;
 				}
 				else if (data.eptViolation.executeAccess)
 				{
 					// 执行不可执行的内存页导致的vmexit
-					hookedPageEntry->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPageEntry->executePage));
-					hookedPageEntry->pte->fields.readAccess = false;
-					hookedPageEntry->pte->fields.writeAccess = false;
-					hookedPageEntry->pte->fields.executeAccess = true;
+					hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->executePage));
+					hookedPage->pte->fields.readAccess = false;
+					hookedPage->pte->fields.writeAccess = false;
+					hookedPage->pte->fields.executeAccess = true;
 				}
 				ept::invalidGlobalEptCache();
-				hookedPageEntry->pte->fields.memoryType = MemoryType::WriteBack;
+				hookedPage->pte->fields.memoryType = MemoryType::WriteBack;
 			}
 
 			void handleEptMisconfig(Registers64* reg)
