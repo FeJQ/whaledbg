@@ -2,19 +2,18 @@
 #include "Util.hpp"
 #include "PageAccessManager.h"
 #include "asm.h"
-
+#include "Log.h"
 
 namespace vmm
 {
 	namespace ept
 	{
-		EptState eptState = { 0 };
+		EptState eptState;
 
 		NTSTATUS enable()
 		{
 			NTSTATUS status = STATUS_SUCCESS;
-			VmxCpuBasedControls primary = { 0 };
-			VmxSecondaryCpuBasedControls secondary = { 0 };
+			
 
 			InitializeListHead(&eptState.hookedPage.listEntry);
 
@@ -25,18 +24,13 @@ namespace vmm
 			eptState.eptp.fields.physAddr = MmGetPhysicalAddress(eptState.pml4t).QuadPart >> 12;
 			eptState.eptp.fields.memoryType = MemoryType::WriteBack;
 			eptState.eptp.fields.pageWalkLength = 3;
-			__vmx_vmwrite(EPT_POINTER, eptState.eptp.all);
 
-			__vmx_vmread(SECONDARY_VM_EXEC_CONTROL, (size_t*)&secondary.all);
-			__vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, (size_t*)&primary.all);
-			primary.fields.activateSecondaryControl = TRUE;
-			secondary.fields.enableEPT = TRUE;
-			__vmx_vmwrite(SECONDARY_VM_EXEC_CONTROL, secondary.all);
-			__vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, primary.all);
+
+			
 
 			//PhRootine();
 
-			pam::PASHidePage();
+			//pam::PASHidePage();
 
 			return status;
 		}
@@ -195,6 +189,7 @@ namespace vmm
 
 		NTSTATUS hidePage(PVOID targetAddress)
 		{
+			DbgBreakPoint();
 			NTSTATUS status = STATUS_SUCCESS;
 			for (LIST_ENTRY* pLink = eptState.hookedPage.listEntry.Flink; pLink != &eptState.hookedPage.listEntry; pLink = pLink->Flink)
 			{

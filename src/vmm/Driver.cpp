@@ -3,7 +3,7 @@
 #include "global.h"
 #include "Util.hpp"
 #include "asm.h"
-
+#include "Ept.h"
 EXTERN_C_BEGIN
 
 using namespace vmm;
@@ -46,7 +46,7 @@ void DriverUnload(PDRIVER_OBJECT pDriver)
 
 NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 {
-	DbgBreakPoint();
+	
 
 	vmx::vcpu = (vmx::Vcpu*)Util::alloc(sizeof(Vcpu) * Util::getCpuCount());
 
@@ -61,30 +61,34 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 	status = vmx::checkVmxAvailable();
 	NT_CHECK(status);
 
-	//检查是否支持EPT
+	// 检查是否支持EPT
 	status = vmx::checkEptAvailable();
 	NT_CHECK(status);
 
-	//为每一个处理器开启VMX特征
+	// 为每一个处理器开启VMX特征
 	status = Util::performForEachProcessor(vmx::enableVmxFeature);
 	NT_CHECK(status);
 
 
 	for (auto i = 0; i < Util::getCpuCount(); i++)
 	{
-		//申请VMX域空间
+		// 申请VMX域空间
 		status = vmx::allocVcpu(&vmx::vcpu[i]);
 		NT_CHECK(status);
 
 		//__vmlaunch(VmxManager::launchVmx,&vcpu[i]);
 	}
+	DbgBreakPoint();
+	// 开启ept
+	ept::enable();
 
-	//在每个处理器上开启VMX
+	// 在每个处理器上开启VMX
 	status = Util::performForEachProcessor(__vmlaunch, vmx::launchVmx, vmx::vcpu);
-
-
-
 	NT_CHECK(status);
+
+
+	__vmcall(VmcallReason::kHookNtLoadDriver, 0);
+	
 
 	DbgLog(Common::LogLevel::Info, "VMX开启成功");
 	return STATUS_SUCCESS;

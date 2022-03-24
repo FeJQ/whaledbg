@@ -7,6 +7,7 @@ EXTERN_C_BEGIN
 enum VmcallReason
 {
 	Exit = 54886475,
+	kHookNtLoadDriver,
 	kVmcallLstarHookEnable,
 	kVmcallLstarHookDisable,
 };

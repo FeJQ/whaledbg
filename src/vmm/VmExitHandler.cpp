@@ -191,13 +191,18 @@
 					reg->rcx = returnAddress;
 					__vmx_vmread(GUEST_RSP, &reg->rdx);
 					reg->r8 = rflags.all;
-
 					break;
 				}
-				/*case LstarHookEnable:
+				case VmcallReason::kHookNtLoadDriver:
+				{
+					DbgBreakPoint();
+					PVOID t_NtLoadDriver = (PVOID)0xFFFFF80002EF91F0;
+					ept::hidePage(t_NtLoadDriver);
+					Util::disableWriteProtect();
+					*(char*)t_NtLoadDriver = 0xCC;
+					Util::enableWriteProtect();
 					break;
-				case LstarHookDisable:
-					break;*/
+				}
 				default:
 					break;
 				}

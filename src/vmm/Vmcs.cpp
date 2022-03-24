@@ -3,6 +3,7 @@
 #include <intrin.h>
 #include "asm.h"
 #include "Util.hpp"
+#include "Ept.h"
 
 
 
@@ -256,6 +257,21 @@
 				//
 				// 6.虚拟机退出信息域 (VM-exit information fields)
 				//
+				return STATUS_SUCCESS;
+			}
+
+			NTSTATUS setupEptFields()
+			{
+				// 设置eptp
+				VmxCpuBasedControls primary = { 0 };
+				VmxSecondaryCpuBasedControls secondary = { 0 };
+				__vmx_vmwrite(EPT_POINTER, ept::eptState.eptp.all);
+				__vmx_vmread(SECONDARY_VM_EXEC_CONTROL, (size_t*)&secondary.all);
+				__vmx_vmread(CPU_BASED_VM_EXEC_CONTROL, (size_t*)&primary.all);
+				primary.fields.activateSecondaryControl = TRUE;
+				secondary.fields.enableEPT = TRUE;
+				__vmx_vmwrite(SECONDARY_VM_EXEC_CONTROL, secondary.all);
+				__vmx_vmwrite(CPU_BASED_VM_EXEC_CONTROL, primary.all);
 				return STATUS_SUCCESS;
 			}
 

@@ -193,7 +193,7 @@ namespace vmm
 			status = setupVmcs(currentVcpu);
 			NT_CHECK(status);
 
-			ept::enable();
+
 
 			//¿ªÆôÐéÄâ»ú
 			__vmx_vmlaunch();
@@ -305,6 +305,10 @@ namespace vmm
 			status = vmcs::setupVmExitCtrlFields(isUseTrueMsrs);
 			NT_CHECK(status);
 			status = vmcs::setupVmEntryCtrlFields(isUseTrueMsrs);
+			NT_CHECK(status);
+			status = vmcs::setupEptFields();
+			NT_CHECK(status);
+
 			return status;
 		}
 	}

@@ -53,6 +53,12 @@
 			 */
 			 NTSTATUS setupVmExitInfoFields();
 
+			 /**
+			  * 设置EPT信息域
+			  * @return NTSTATUS: 
+			  */
+			  NTSTATUS setupEptFields();
+
 			/**
 			 * 获取段描述符访问权限
 			 * @param USHORT selector: 段选择子
