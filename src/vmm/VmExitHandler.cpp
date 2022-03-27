@@ -2,7 +2,7 @@
 #include "asm.h"
 #include "Ept.h"
 #include "Util.hpp"
-
+#include <ntddk.h>
 
 	namespace vmm
 	{
@@ -196,8 +196,15 @@
 				case VmcallReason::kHookNtLoadDriver:
 				{
 					DbgBreakPoint();
-					PVOID t_NtLoadDriver = (PVOID)0xFFFFF80002EF91F0;
-					ept::hidePage(t_NtLoadDriver);
+					NTSTATUS status=STATUS_SUCCESS;
+					//UNICODE_STRING strRoutineName;
+					//RtlInitUnicodeString(&strRoutineName, L"NtLoadDriver");
+					//PVOID t_NtLoadDriver = MmGetSystemRoutineAddress(&strRoutineName);
+
+					PVOID t_NtLoadDriver = (PVOID)0xFFFFF80002EF51F0;
+
+					status=ept::hidePage(t_NtLoadDriver);
+					ASSERT(status==STATUS_SUCCESS);
 					Util::disableWriteProtect();
 					*(char*)t_NtLoadDriver = 0xCC;
 					Util::enableWriteProtect();

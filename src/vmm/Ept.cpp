@@ -13,7 +13,7 @@ namespace vmm
 		NTSTATUS enable()
 		{
 			NTSTATUS status = STATUS_SUCCESS;
-			
+
 
 			InitializeListHead(&eptState.hookedPage.listEntry);
 
@@ -26,7 +26,7 @@ namespace vmm
 			eptState.eptp.fields.pageWalkLength = 3;
 
 
-			
+
 
 			//PhRootine();
 
@@ -164,10 +164,10 @@ namespace vmm
 			// pteIndex = pa[12:20]    每一项8字节
 			// 4kb page index= pa[0:11] & 0xfffff8  每一项1字节
 
-			ULONG pml4teIndex1 = (pa & 0xff800000000) >> (9 + 9 + 9 + 12);
-			ULONG pdpteIndex1 = (pa & 0x007fc0000000) >> (9 + 9 + 12);
-			ULONG pdteIndex1 = (pa & 0x00003fe00000) >> (9 + 12);
-			ULONG pteIndex1 = (pa & 0x0000001ff000) >> (12);
+			ULONG pml4teIndex1 = (pa & 0xff800000000ull) >> (9 + 9 + 9 + 12);
+			ULONG pdpteIndex1 = (pa & 0x007fc0000000ull) >> (9 + 9 + 12);
+			ULONG pdteIndex1 = (pa & 0x00003fe00000ull) >> (9 + 12);
+			ULONG pteIndex1 = (pa & 0x0000001ff000ull) >> (12);
 
 
 			ULONG pml4teIndex2 = (pa >> (12 + 9 + 9 + 9)) & 0x1ffull;
@@ -190,6 +190,7 @@ namespace vmm
 		NTSTATUS hidePage(PVOID targetAddress)
 		{
 			DbgBreakPoint();
+			_disable();
 			NTSTATUS status = STATUS_SUCCESS;
 			for (LIST_ENTRY* pLink = eptState.hookedPage.listEntry.Flink; pLink != &eptState.hookedPage.listEntry; pLink = pLink->Flink)
 			{
@@ -232,8 +233,12 @@ namespace vmm
 			status = setPageAccess(newHookedPage->hookedPageAddress, EptAccess::Execute);
 			NT_CHECK();
 
+			// 清ept寻址缓存
+			ept::invalidGlobalEptCache();
+
 			// 将目标PageEntry添加到page list
 			InsertHeadList(&eptState.hookedPage.listEntry, &newHookedPage->listEntry);
+			_enable();
 			return status;
 		}
 
@@ -266,13 +271,7 @@ namespace vmm
 			pte->fields.writeAccess = (access & EptAccess::Write) >> 1;
 			pte->fields.executeAccess = (access & EptAccess::Execute) >> 2;
 			pte->fields.memoryType = MemoryType::WriteBack;
-
-			NTSTATUS checkStatus = pte->fields.readAccess & pte->fields.writeAccess & pte->fields.executeAccess;
-			if (checkStatus == access && pte->fields.memoryType == MemoryType::WriteBack)
-			{
-				return STATUS_SUCCESS;
-			}
-			return STATUS_FAIL_CHECK;
+			return STATUS_SUCCESS;
 		}
 
 		void invalidGlobalEptCache()

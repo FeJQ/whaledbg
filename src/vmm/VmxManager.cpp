@@ -175,7 +175,6 @@ namespace vmm
 		NTSTATUS launchVmx(Vcpu* vcpu, PVOID guestRsp, PVOID guestRip)
 		{
 			NTSTATUS status;
-			DbgBreakPoint();
 
 			Vcpu* currentVcpu = &vcpu[Util::currentCpuIndex()];
 
