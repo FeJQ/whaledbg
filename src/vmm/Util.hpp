@@ -159,6 +159,12 @@ public:
 		return pa.QuadPart;
 	}
 
+	static ULONG_PTR vaToPa(ULONG_PTR virtualAddress)
+	{
+		PHYSICAL_ADDRESS pa = MmGetPhysicalAddress((PVOID)virtualAddress);
+		return pa.QuadPart;
+	}
+
 	/**
 	 * 物理地址转虚拟地址
 	 *

@@ -148,7 +148,7 @@ namespace vmm
 			return status;
 		}
 
-		PteEntry* getPtEntry(PteEntry* pml4t, ULONG_PTR pa)
+		PteEntry* getPtEntry(ULONG_PTR pa)
 		{
 			/*
 			  ·ÖÒ³Ä£Ê½:9 9 9 9 12
@@ -180,7 +180,7 @@ namespace vmm
 			PteEntry* pdte = 0;
 			PteEntry* pte = 0;
 
-			pml4te = &pml4t[pml4teIndex1];
+			pml4te = &eptState.pml4t[pml4teIndex1];
 			pdpte = &((PteEntry*)Util::paToVa(GetPageHead(pml4te->all)))[pdpteIndex1];
 			pdte = &((PteEntry*)Util::paToVa(GetPageHead(pdpte->all)))[pdteIndex1];
 			pte = &((PteEntry*)Util::paToVa(GetPageHead(pdte->all)))[pteIndex1];

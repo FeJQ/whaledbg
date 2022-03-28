@@ -81,11 +81,10 @@ namespace vmm
 
 		/**
 		 * 获取物理地址所对应的PTE
-		 * @param EptEntry * pml4t: pml4t首地址
 		 * @param ULONG_PTR pa: 要查询的物理地址
 		 * @return EptEntry*: PTE
 		 */
-		PteEntry* getPtEntry(PteEntry* pml4t, ULONG_PTR pa);
+		PteEntry* getPtEntry(ULONG_PTR pa);
 
 		/**
 		 * 隐藏页面，并将原始页的访问权限设置为只执行

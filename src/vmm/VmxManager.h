@@ -24,6 +24,14 @@ namespace vmm
 			PVOID vmmStack;
 			PVOID vmmStackBase;
 			BOOLEAN isVmxEnable;
+
+			// 导致ept violation 的指令所在的页
+			ULONG_PTR eptViolationRipPage;
+			EptAccess oldEptViolationRipPageAccess;
+
+			// 权限不够而引发ept violation 的页
+			ULONG_PTR eptViolationPage;
+			EptAccess oldEptViolationPageAccess;
 		};
 
 		NTSTATUS initialize();

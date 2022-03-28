@@ -103,6 +103,7 @@
     <ClCompile Include="Ept.cpp" />
     <ClCompile Include="global.cpp" />
     <ClCompile Include="Driver.cpp" />
+    <ClCompile Include="VtxInstruction.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="PageAccessManager.cpp" />
     <ClCompile Include="Vmcs.cpp" />
@@ -122,6 +123,7 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="Ept.h" />
     <ClInclude Include="global.h" />
+    <ClInclude Include="VtxInstruction.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="PageAccessManager.h" />
     <ClInclude Include="Vmcs.h" />
