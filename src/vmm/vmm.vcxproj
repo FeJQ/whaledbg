@@ -103,6 +103,7 @@
     <ClCompile Include="Ept.cpp" />
     <ClCompile Include="global.cpp" />
     <ClCompile Include="Driver.cpp" />
+    <ClCompile Include="Hooker.cpp" />
     <ClCompile Include="VtxInstruction.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="PageAccessManager.cpp" />
@@ -123,6 +124,7 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="Ept.h" />
     <ClInclude Include="global.h" />
+    <ClInclude Include="Hooker.h" />
     <ClInclude Include="VtxInstruction.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="PageAccessManager.h" />
@@ -131,6 +133,7 @@
     <ClInclude Include="IA32.h" />
     <ClInclude Include="Util.hpp" />
     <ClInclude Include="VmxManager.h" />
+    <MASM Include="lde.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

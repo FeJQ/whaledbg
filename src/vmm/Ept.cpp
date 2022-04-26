@@ -118,7 +118,7 @@ namespace vmm
 			{
 				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
 				ExFreePoolWithTag((PVOID)tempHookedPage->shadowPageAddress, 'fake');
-				status = setPageAccess((ULONG_PTR)tempHookedPage->hookedPageAddress, EptAccess::All);
+				status = setPageAccess((ULONG_PTR)tempHookedPage->originalPageAddress, EptAccess::All);
 				ASSERT(status == STATUS_SUCCESS);
 				RemoveHeadList(&eptState.hookedPage.listEntry);
 				ExFreePoolWithTag(tempHookedPage, 'hkpg');
@@ -189,13 +189,12 @@ namespace vmm
 
 		NTSTATUS hidePage(PVOID targetAddress)
 		{
-			DbgBreakPoint();
 			_disable();
 			NTSTATUS status = STATUS_SUCCESS;
 			for (LIST_ENTRY* pLink = eptState.hookedPage.listEntry.Flink; pLink != &eptState.hookedPage.listEntry; pLink = pLink->Flink)
 			{
 				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
-				if (tempHookedPage->hookedPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
+				if (tempHookedPage->originalPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
 				{
 					// 已经Hook过这个页面，所以直接返回成功
 					return STATUS_SUCCESS;
@@ -211,30 +210,33 @@ namespace vmm
 			RtlZeroMemory(newHookedPage, sizeof(HookedPage));
 
 			// 记录目标页首地址, 目标页所在的pte, 以及用于替换的假页面
-			newHookedPage->hookedPageAddress = (ULONG_PTR)PAGE_ALIGN(targetAddress);
-			newHookedPage->pte = ept::getPtEntry(eptState.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(targetAddress)).QuadPart);
+			newHookedPage->originalPageAddress = (ULONG_PTR)PAGE_ALIGN(targetAddress);
+			newHookedPage->pte = ept::getPtEntry(MmGetPhysicalAddress((PVOID)PAGE_ALIGN(targetAddress)).QuadPart);
 			newHookedPage->shadowPageAddress = (ULONG_PTR)ExAllocatePoolWithTag(NonPagedPool, PAGE_SIZE, 'fake');
 			if (!newHookedPage->shadowPageAddress)
 			{
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
-			RtlMoveMemory((PVOID)newHookedPage->shadowPageAddress, (PVOID)newHookedPage->hookedPageAddress, PAGE_SIZE);
+			RtlMoveMemory((PVOID)newHookedPage->shadowPageAddress, (PVOID)newHookedPage->originalPageAddress, PAGE_SIZE);
 
-			// 分别配置供guest读,写,执行的页面
-			newHookedPage->readPage = newHookedPage->shadowPageAddress;
-			newHookedPage->writePage = newHookedPage->shadowPageAddress;
-			newHookedPage->executePage = newHookedPage->hookedPageAddress;
 
 			// 给供guest读写的假页面对应的pte读写权限
-			status = setPageAccess(newHookedPage->shadowPageAddress, (EptAccess)(EptAccess::Read | EptAccess::Write));
+			status = setPageAccess(newHookedPage->shadowPageAddress, EptAccess::Read | EptAccess::Write);
 			NT_CHECK();
 
 			// 给予供guest执行代码的真实页面只执行的权限
-			status = setPageAccess(newHookedPage->hookedPageAddress, EptAccess::Execute);
+			status = setPageAccess(newHookedPage->originalPageAddress, EptAccess::Execute);
 			NT_CHECK();
 
+
+			// 指定当前pte的状态为原始物理页
+			newHookedPage->pageState = PageState::OriginalPage;
+
 			// 清ept寻址缓存
+			// 通过vmcall通知host来执行invept指令(没必要，因为调用的时候，正处于Host模式)
 			ept::invalidGlobalEptCache();
+			//__vmcall(VmcallReason::INVEPT, nullptr);
+			 
 
 			// 将目标PageEntry添加到page list
 			InsertHeadList(&eptState.hookedPage.listEntry, &newHookedPage->listEntry);
@@ -248,7 +250,7 @@ namespace vmm
 			for (LIST_ENTRY* pLink = eptState.hookedPage.listEntry.Flink; pLink != &eptState.hookedPage.listEntry; pLink = pLink->Flink)
 			{
 				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
-				if (tempHookedPage->hookedPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
+				if (tempHookedPage->originalPageAddress == (ULONG_PTR)PAGE_ALIGN(targetAddress))
 				{
 					ExFreePoolWithTag((PVOID)tempHookedPage->shadowPageAddress, 'fake');
 					status = setPageAccess((ULONG_PTR)targetAddress, EptAccess::All);
@@ -262,10 +264,10 @@ namespace vmm
 
 
 
-		NTSTATUS setPageAccess(ULONG_PTR pageAddress, EptAccess access)
+		NTSTATUS setPageAccess(ULONG_PTR pageAddress, ULONG access)
 		{
 			//获取目标地址对应的pte	
-			PteEntry* pte = ept::getPtEntry(eptState.pml4t, MmGetPhysicalAddress((PVOID)PAGE_ALIGN(pageAddress)).QuadPart);
+			PteEntry* pte = ept::getPtEntry(MmGetPhysicalAddress((PVOID)PAGE_ALIGN(pageAddress)).QuadPart);
 			//配置权限
 			pte->fields.readAccess = (access & EptAccess::Read) >> 0;
 			pte->fields.writeAccess = (access & EptAccess::Write) >> 1;

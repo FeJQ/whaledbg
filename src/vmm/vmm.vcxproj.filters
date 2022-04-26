@@ -31,6 +31,9 @@
     <ClCompile Include="VtxInstruction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Hooker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="asm.h">
@@ -69,12 +72,16 @@
     <ClInclude Include="VtxInstruction.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Hooker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Inf Include="vmm.inf" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="asm64..asm" />
+    <MASM Include="lde.asm" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Header Files">

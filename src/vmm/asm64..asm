@@ -291,6 +291,7 @@ UtilDeleteCriticalSection PROC
 UtilDeleteCriticalSection ENDP
 
 __invept PROC
+	int 3
 	invept rcx, oword ptr [rdx]
     jz invept_break
     jc invept_break

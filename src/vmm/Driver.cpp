@@ -1,12 +1,12 @@
-#include "Common.h"
 #include "VmxManager.h"
-#include "global.h"
 #include "Util.hpp"
 #include "asm.h"
 #include "Ept.h"
+#include "Log.h"
 EXTERN_C_BEGIN
 
 using namespace vmm;
+using vmm::vmx::Vcpu;
 
 void DriverUnload(PDRIVER_OBJECT pDriver)
 {
@@ -39,9 +39,9 @@ void DriverUnload(PDRIVER_OBJECT pDriver)
 
 	if (!NT_SUCCESS(status))
 	{
-		DbgLog(Common::LogLevel::Error, "Enable vmx failed.");
+		LOG(log::ERROR, "Failed to enable vmx");
 	}
-	DbgLog(Common::LogLevel::Info, "驱动已卸载");
+	LOG(log::INFO, "驱动已卸载");
 }
 
 NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
@@ -50,12 +50,12 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 
 	vmx::vcpu = (vmx::Vcpu*)Util::alloc(sizeof(Vcpu) * Util::getCpuCount());
 
-	Common::log(__FUNCTION__, Common::LogLevel::Info, "%s,%d", "hello world", 5);
+	LOG(log::INFO, "%s,%d", "hello world", 5);
 	pDriver->DriverUnload = DriverUnload;
 	NTSTATUS status = STATUS_SUCCESS;
 
 	
-	DbgLog(Common::LogLevel::Info, "驱动已装载");
+	LOG(log::INFO, "驱动已装载");
 
 	//检查是否支持VMX
 	status = vmx::checkVmxAvailable();
@@ -78,7 +78,6 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 
 		//__vmlaunch(VmxManager::launchVmx,&vcpu[i]);
 	}
-	DbgBreakPoint();
 	// 开启ept
 	ept::enable();
 
@@ -87,10 +86,10 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDriver, PUNICODE_STRING pRegStr)
 	NT_CHECK(status);
 
 
-	__vmcall(VmcallReason::kHookNtLoadDriver, 0);
+	__vmcall(VmcallReason::HOOK_NT_LOAD_DRIVER, 0);
 	
 
-	DbgLog(Common::LogLevel::Info, "VMX开启成功");
+	LOG(log::INFO, "VMX开启成功");
 	return STATUS_SUCCESS;
 }
 

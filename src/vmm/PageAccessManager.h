@@ -2,10 +2,10 @@
 #include "Common.h"
 
 
-	namespace vmm
+namespace vmm
+{
+	namespace pam
 	{
-		namespace pam
-		{
-			NTSTATUS PASHidePage();
-		}
+		NTSTATUS PASHidePage();
 	}
+}

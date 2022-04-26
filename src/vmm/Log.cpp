@@ -20,32 +20,21 @@ namespace vmm
 
 			switch (level)
 			{
-			case LOG_LEVEL_DEBUG:
-			{
-				logPrifix = "[DEBUG]";
+			case vmm::log::DEBUG:
+				logPrifix = "[debug]";
 				break;
-			}
-			case LOG_LEVEL_DUMP:
-			{
-				logPrifix = "[DUMP]";
+			case vmm::log::INFO:
+				logPrifix = "[info]";
 				break;
-			}
-			case LOG_LEVEL_ERROR:
-			{
-				logPrifix = "[ERROR]";
+			case vmm::log::ERROR:
+				logPrifix = "[error]";
 				break;
-			}
-			case LOG_LEVEL_INFO:
-			{
-				logPrifix = "[INFORMATION]";
+			case vmm::log::VERBOSE:
+				logPrifix = "[verbose]";
 				break;
-			}
 			default:
-			{
-				logPrifix = "[UNKNOWN]";
+				logPrifix = "[unkown]";
 				break;
-			}
-
 			}
 
 			KeQuerySystemTime(&systemTime);

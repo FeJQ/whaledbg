@@ -3,7 +3,7 @@
 #include "Vmcs.h"
 #include "asm.h"
 #include "Util.hpp"
-#include "global.h"
+#include "Log.h"
 #include "Ept.h"
 
 
@@ -33,7 +33,7 @@ namespace vmm
 			CpuIdFiledEcx* cpuIdFiledEcx = (CpuIdFiledEcx*)(&cpuIdField.rcx);
 			if (cpuIdFiledEcx->fields.vmx != 1)
 			{
-				DbgLog(Common::LogLevel::Error, "Vt is not supported on this machine.");
+				LOG(log::ERROR, "Vt is not supported on this machine.");
 				return STATUS_HV_FEATURE_UNAVAILABLE;
 			}
 
@@ -41,7 +41,7 @@ namespace vmm
 			cr0.all = __readcr0();
 			if (!cr0.fields.pg || !cr0.fields.ne || !cr0.fields.pe)
 			{
-				DbgLog(Common::LogLevel::Error, "Cr0 not supported to be virtualizaion.");
+				LOG(log::ERROR, "Cr0 not supported to be virtualizaion.");
 				return STATUS_HV_FEATURE_UNAVAILABLE;
 			}
 
@@ -50,7 +50,7 @@ namespace vmm
 			basicMsr.all = __readmsr(MSR_IA32_VMX_BASIC);
 			if (basicMsr.fields.memory_type != MemoryType::WriteBack)
 			{
-				DbgLog(Common::LogLevel::Error, "Write-back cache type is not supported.");
+				LOG(log::ERROR, "Write-back cache type is not supported.");
 				return STATUS_HV_FEATURE_UNAVAILABLE;
 			}
 
@@ -95,7 +95,7 @@ namespace vmm
 				!capability.fields.support_all_context_invvpid ||
 				!capability.fields.support_single_context_retaining_globals_invvpid)
 			{
-				DbgLog(Common::LogLevel::Warnning, "Ept is unavailable.");
+				LOG(log::WARNNING, "Ept is unavailable.");
 				return STATUS_FAIL_CHECK;
 			}
 			return STATUS_SUCCESS;
@@ -122,7 +122,7 @@ namespace vmm
 			}
 			if (!controlMsr.fields.lock && !controlMsr.fields.enable_vmxon)
 			{
-				DbgLog(Common::LogLevel::Error, "Virtualization is not enabled in the BIOS.");
+				LOG(log::ERROR, "Virtualization is not enabled in the BIOS.");
 				return STATUS_HV_FEATURE_UNAVAILABLE;
 			}
 			return STATUS_SUCCESS;
@@ -137,7 +137,7 @@ namespace vmm
 			pVmxonRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMXON); //4KB
 			if (!pVmxonRegion)
 			{
-				DbgLog(Common::LogLevel::Error, "Allocate vmxon memory failed.");
+				LOG(log::ERROR, "Allocate vmxon memory failed.");
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
 			RtlZeroMemory(pVmxonRegion, 0x1000);
@@ -145,7 +145,7 @@ namespace vmm
 			pVmcsRegion = ExAllocatePoolWithTag(NonPagedPool, 0x1000, POOL_TAG_VMCS);
 			if (!pVmcsRegion)
 			{
-				DbgLog(Common::LogLevel::Error, "Allocate vmcs memory failed.");
+				LOG(log::ERROR, "Allocate vmcs memory failed.");
 				ExFreePoolWithTag(pVmxonRegion, 0x1000);
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
@@ -154,16 +154,16 @@ namespace vmm
 			pVmStack = ExAllocatePoolWithTag(NonPagedPool, KERNEL_STACK_SIZE, POOL_TAG_HOST_STACK);
 			if (!pVmStack)
 			{
-				DbgLog(Common::LogLevel::Error, "Allocate host stack memory failed.");
+				LOG(log::ERROR, "Allocate host stack memory failed.");
 				ExFreePoolWithTag(pVmxonRegion, 0x1000);
 				ExFreePoolWithTag(pVmcsRegion, 0x1000);
 				return STATUS_MEMORY_NOT_ALLOCATED;
 			}
 			RtlZeroMemory(pVmStack, KERNEL_STACK_SIZE);
 
-			DbgLog(Common::LogLevel::Info, "Vmxon region:0x%08X.", pVmxonRegion);
-			DbgLog(Common::LogLevel::Info, "Vmcs region:0x%08X.", pVmcsRegion);
-			DbgLog(Common::LogLevel::Info, "Host stack region:0x%08X.", pVmStack);
+			LOG(log::INFO, "Vmxon region:0x%08X.", pVmxonRegion);
+			LOG(log::INFO, "Vmcs region:0x%08X.", pVmcsRegion);
+			LOG(log::INFO, "Host stack region:0x%08X.", pVmStack);
 
 			vcpu->vmxonRegion = pVmxonRegion;
 			vcpu->vmcsRegion = pVmcsRegion;
@@ -199,13 +199,12 @@ namespace vmm
 
 			// See:30.4 VM Instruction Error Numbers
 			int error = 0;
-			DbgBreakPoint();
 			if (__vmx_vmread(VM_INSTRUCTION_ERROR, (size_t*)&error) != 0)
 			{
-				DbgLog(Common::LogLevel::Error, "read error code failed");
+				LOG(log::ERROR, "read error code failed");
 				return FALSE;
 			}
-			DbgLog(Common::LogLevel::Error, "vmlaunch failed,error:%d", error);
+			LOG(log::ERROR, "vmlaunch failed,error:%d", error);
 			return FALSE;
 		}
 
@@ -217,7 +216,7 @@ namespace vmm
 			//__vmx_off();
 
 			VmcallParam param = { 0 };
-			__vmcall(VmcallReason::Exit, &param);
+			__vmcall(VmcallReason::EXIT, &param);
 
 
 			//Cr4.VMXE÷√0
@@ -264,7 +263,7 @@ namespace vmm
 			uRet = __vmx_on(&tmpVmxonRegionPa);
 			if (uRet != 0)
 			{
-				DbgLog(Common::LogLevel::Error, "perform _vmx_on failed");
+				LOG(log::ERROR, "perform _vmx_on failed");
 				return STATUS_UNSUCCESSFUL;
 			}
 
@@ -273,7 +272,7 @@ namespace vmm
 			uRet = __vmx_vmclear(&tmpVmcsRegionPa);
 			if (uRet != 0)
 			{
-				DbgLog(Common::LogLevel::Error, "perform __vmx_vmclear failed");
+				LOG(log::ERROR, "perform __vmx_vmclear failed");
 				return STATUS_UNSUCCESSFUL;
 			}
 
@@ -282,7 +281,7 @@ namespace vmm
 			uRet = __vmx_vmptrld(&tmpVmcsRegionPa);
 			if (uRet != 0)
 			{
-				DbgLog(Common::LogLevel::Error, "perform __vmx_vmptrld failed");
+				LOG(log::ERROR, "perform __vmx_vmptrld failed");
 				return STATUS_UNSUCCESSFUL;
 			}
 			return status;

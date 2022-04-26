@@ -5,17 +5,35 @@
 #include "VtxInstruction.h"
 #include <ntddk.h>
 #include "VmxManager.h"
+#include "Log.h"
+#include "Hooker.h"
+
 
 namespace vmm
 {
 	namespace vmexit
 	{
+		typedef NTSTATUS(*t_NtLoadDriver)(IN PUNICODE_STRING DriverServiceName);
+		t_NtLoadDriver tramp_NtLoadDriver;
+
+		NTSTATUS proxy_NtLoadDriver(IN PUNICODE_STRING DriverServiceName)
+		{
+			DbgBreakPoint();
+			LOG(log::DEBUG, "proxy_NtLoadDriver:%ws\n", DriverServiceName->Buffer)
+				return tramp_NtLoadDriver(DriverServiceName);
+		}
+
 		using ept::PteEntry;
 		using ept::HookedPage;
+		using ept::EptAccess;
 
 		BOOLEAN vmExitEntryPoint(Registers64* reg)
 		{
+
+
 			VmExitInformation exitReason = vtx::readVmexitReason();
+
+
 
 			BOOLEAN continueVmx = TRUE;
 			ULONG_PTR rip = vtx::readGuestRip();
@@ -29,9 +47,11 @@ namespace vmm
 				handleCpuid(reg);
 				break;
 			case VmExitReason::Invd:
+				DbgBreakPoint();
 				handleInvd(reg);
 				break;
 			case VmExitReason::Vmcall:
+				DbgBreakPoint();
 				continueVmx = handleVmcall(reg);
 				if (continueVmx) resumeToNextInstruction();
 				break;
@@ -45,6 +65,7 @@ namespace vmm
 				handleMsrWrite(reg);
 				break;
 			case VmExitReason::Mtf:
+				DbgBreakPoint();
 				handleMtf(reg);
 				break;
 			case VmExitReason::EptViolation:
@@ -130,13 +151,15 @@ namespace vmm
 
 		BOOLEAN handleVmcall(Registers64* reg)
 		{
-			VmcallReason reson = (VmcallReason)reg->rcx;
+			VmcallReason reason = (VmcallReason)reg->rcx;
 			VmcallParam* param = (VmcallParam*)reg->rdx;
 
+			DbgBreakPoint();
+
 			BOOLEAN continueVmx = TRUE;
-			switch (reson)
+			switch (reason)
 			{
-			case VmcallReason::Exit:
+			case VmcallReason::EXIT:
 			{
 				continueVmx = FALSE;
 
@@ -189,23 +212,29 @@ namespace vmm
 				reg->r8 = rflags.all;
 				break;
 			}
-			case VmcallReason::kHookNtLoadDriver:
+			case VmcallReason::HOOK_NT_LOAD_DRIVER:
 			{
-				DbgBreakPoint();
 				NTSTATUS status = STATUS_SUCCESS;
 				//UNICODE_STRING strRoutineName;
 				//RtlInitUnicodeString(&strRoutineName, L"NtLoadDriver");
 				//PVOID t_NtLoadDriver = MmGetSystemRoutineAddress(&strRoutineName);
 
-				PVOID t_NtLoadDriver = (PVOID)0xFFFFF80002EF51F0;
+				DbgBreakPoint();
 
-				status = ept::hidePage(t_NtLoadDriver);
+				PVOID fn_NtLoadDriver = (PVOID)0xFFFFF80002F301F0;
+
+				status = ept::hidePage(fn_NtLoadDriver);
 				ASSERT(status == STATUS_SUCCESS);
 				Util::disableWriteProtect();
-				*(char*)t_NtLoadDriver = 0xCC;
+				//*(char*)t_NtLoadDriver = 0xCC;
+				hooker::hookProc(fn_NtLoadDriver, (PVOID)proxy_NtLoadDriver, (PVOID*)&tramp_NtLoadDriver);
+
 				Util::enableWriteProtect();
 				break;
 			}
+			case VmcallReason::INVEPT:
+				ept::invalidGlobalEptCache();
+				break;
 			default:
 				break;
 			}
@@ -232,7 +261,7 @@ namespace vmm
 					__vmx_vmwrite(GUEST_CR4, *pReg);
 					break;
 				default:
-					DbgLog(Common::LogLevel::Error, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.registerNumber);
+					LOG(log::ERROR, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.registerNumber);
 					DbgBreakPoint();
 					break;
 				}
@@ -249,13 +278,13 @@ namespace vmm
 					__vmx_vmread(GUEST_CR4, pReg);
 					break;
 				default:
-					DbgLog(Common::LogLevel::Error, "[%s]accessType:%d", __FUNCTION__, data.crAccess.registerNumber);
+					LOG(log::ERROR, "[%s]accessType:%d", __FUNCTION__, data.crAccess.registerNumber);
 					DbgBreakPoint();
 					break;
 				}
 				break;
 			default:
-				DbgLog(Common::LogLevel::Error, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.accessType);
+				LOG(log::ERROR, "[%s]registerNumber:%d", __FUNCTION__, data.crAccess.accessType);
 				DbgBreakPoint();
 				break;
 			}
@@ -302,10 +331,39 @@ namespace vmm
 
 		void handleMtf(Registers64* reg)
 		{
+			DbgBreakPoint();
+			//PteEntry* pte = ept::getPtEntry(Util::vaToPa(rip));
 			ULONG_PTR rip = vtx::readGuestRip();
-			PteEntry* pte = ept::getPtEntry(Util::vaToPa(rip));
-			pte->fields
+			ULONG64 violationPa = vtx::readGuestPhysicalAddress();
+
+			HookedPage* hookedPage = NULL;
+
+			// 获取替换过的页面的相关数据
+			for (LIST_ENTRY* pLink = ept::eptState.hookedPage.listEntry.Flink; pLink != &ept::eptState.hookedPage.listEntry; pLink = pLink->Flink)
+			{
+				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
+				ULONG_PTR hookedPa = Util::vaToPa((PVOID)tempHookedPage->originalPageAddress);
+				if ((tempHookedPage->pageState==ept::PageState::ShadowPage) && ((ULONG_PTR)PAGE_ALIGN(violationPa) == (ULONG_PTR)PAGE_ALIGN(hookedPa)) )
+				{
+					hookedPage = tempHookedPage;
+					break;
+				}
+			}
+			if (hookedPage == NULL)
+			{
+				DbgBreakPoint();
+				return;
+			}
+			hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->originalPageAddress));
+			hookedPage->pte->fields.readAccess = false;
+			hookedPage->pte->fields.writeAccess = false;
+			hookedPage->pte->fields.executeAccess = true;
+
+			ept::invalidGlobalEptCache();
+			vtx::disableMTF();
+			
 		}
+
 
 		void handleEptViolation(Registers64* reg)
 		{
@@ -328,9 +386,9 @@ namespace vmm
 				__vmx_vmread(GUEST_LINEAR_ADDRESS, &linearAddr);
 			}
 
-			DbgBreakPoint();
-			ULONG_PTR violationAddress = (ULONG_PTR)Util::paToVa(violationPa);
-			PteEntry* pte = ept::getPtEntry((ULONG_PTR)PAGE_ALIGN(violationPa));
+
+			//ULONG_PTR violationAddress = (ULONG_PTR)Util::paToVa(violationPa);
+			//PteEntry* pte = ept::getPtEntry((ULONG_PTR)PAGE_ALIGN(violationPa));
 
 
 			HookedPage* hookedPage = NULL;
@@ -339,7 +397,7 @@ namespace vmm
 			for (LIST_ENTRY* pLink = ept::eptState.hookedPage.listEntry.Flink; pLink != &ept::eptState.hookedPage.listEntry; pLink = pLink->Flink)
 			{
 				HookedPage* tempHookedPage = CONTAINING_RECORD(pLink, HookedPage, listEntry);
-				ULONG_PTR hookedPa = Util::vaToPa((PVOID)tempHookedPage->hookedPageAddress);
+				ULONG_PTR hookedPa = Util::vaToPa((PVOID)tempHookedPage->originalPageAddress);
 
 				// 判断发生ept violation的页是否与hooked页为同一个页
 				if ((ULONG_PTR)PAGE_ALIGN(violationPa) == (ULONG_PTR)PAGE_ALIGN(hookedPa))
@@ -353,45 +411,29 @@ namespace vmm
 				DbgBreakPoint();
 				return;
 			}
+
 			DbgBreakPoint();
 
-			if (data.eptViolation.readAccess)
+			// 1.修改pte的地址项
+			if (data.eptViolation.readAccess || data.eptViolation.writeAccess)
 			{
-				// 读不可读的内存页导致的vmexit		
-				hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->readPage));
+				hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->shadowPageAddress));
+				hookedPage->pte->fields.readAccess = true;
+				hookedPage->pte->fields.writeAccess = true;
+				hookedPage->pte->fields.executeAccess = true;
+				hookedPage->pageState = ept::PageState::ShadowPage;
 			}
-			else if (data.eptViolation.writeAccess)
+			else
 			{
-				// 写不可写的内存页导致的vmexit	
-				hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->writePage));
+				LOG(log::ERROR, "Unexpected ept violation,reason=excutet,rip=0x%X,linearAddr=0x%X",rip, linearAddr);
+				DbgBreakPoint();
 			}
-			else if (data.eptViolation.executeAccess)
-			{
-				// 执行不可执行的内存页导致的vmexit
-				hookedPage->pte->all = (ULONG64)PAGE_ALIGN(Util::vaToPa((PVOID)hookedPage->executePage));
-			}
-			PteEntry* ripPte = ept::getPtEntry((ULONG_PTR)PAGE_ALIGN(Util::vaToPa(rip)));
-			EptAccess oldViolationPageAccess = static_cast<EptAccess>(hookedPage->pte->fields.readAccess | hookedPage->pte->fields.writeAccess | hookedPage->pte->fields.executeAccess);
-			EptAccess oldViolationRipPageAccess = static_cast<EptAccess>(ripPte->fields.readAccess | ripPte->fields.writeAccess | ripPte->fields.executeAccess);
-
-			_disable();
-			// 分别保存发生Ept violation时的rip和violationPa所在的物理页的地址, 以及他们的EptAccess
-			// 之后给EptAccess::all权限, 并返回guest,执行一行指令后会陷入mtfHanlder, 此时再将这两个页面的EptAccess复原,并执行invept(或许只需要操作violationPa就可以了)
-			vmx::vcpu->eptViolationPage= (ULONG_PTR)PAGE_ALIGN(violationPa);
-			vmx::vcpu->eptViolationRipPage = (ULONG_PTR)PAGE_ALIGN(Util::vaToPa(rip));
-			vmx::vcpu->oldEptViolationPageAccess = oldViolationPageAccess;
-			vmx::vcpu->oldEptViolationRipPageAccess = oldViolationRipPageAccess;
-
-			hookedPage->pte->fields.readAccess = true;
-			hookedPage->pte->fields.writeAccess = true;
-			hookedPage->pte->fields.executeAccess = true;
-			hookedPage->pte->fields.memoryType = MemoryType::WriteBack;
 
 			ept::invalidGlobalEptCache();
 
-			
+			//vtx::setInterruptWindowExiting(false);
 
-			vtx::setMonitorTrapFlag(true);
+			vtx::enableMTF();
 		}
 
 		void handleEptMisconfig(Registers64* reg)
@@ -418,5 +460,7 @@ namespace vmm
 			DbgBreakPoint();
 			KdPrint(("EptMisconfiguration\n"));
 		}
+
+
 	}
 }

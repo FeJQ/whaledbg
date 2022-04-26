@@ -1,21 +1,25 @@
 #pragma once
 
+#define LOG(level,format,...) log::logPrint(level,format,__VA_ARGS__);
 
 
-	namespace vmm
+
+namespace vmm
+{
+	namespace log
 	{
-		namespace log
+		
+		enum LogLevel
 		{
-			enum LogLevel
-			{
-				LOG_LEVEL_DEBUG,
-				LOG_LEVEL_ERROR,
-				LOG_LEVEL_DUMP,
-				LOG_LEVEL_INFO
-			};
+			DEBUG,
+			INFO,
+			WARNNING,
+			ERROR,
+			VERBOSE
+		};
 
-			void logPrint(LogLevel level, const char* format, ...);
+		void logPrint(LogLevel level, const char* format, ...);
 
-		}
 	}
+}
 

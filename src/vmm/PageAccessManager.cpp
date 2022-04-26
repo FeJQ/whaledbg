@@ -20,10 +20,9 @@ namespace vmm
 			// NtLoadDriver
 			PVOID t_NtLoadDriver = (PVOID)0xfffff80002f441f0;
 
-			DbgBreakPoint();
 
 			//获取目标地址对应的pte
-			PteEntry* pte = ept::getPtEntry(ept::eptState.pml4t, MmGetPhysicalAddress((PVOID)t_NtLoadDriver).QuadPart);
+			PteEntry* pte = ept::getPtEntry(MmGetPhysicalAddress((PVOID)t_NtLoadDriver).QuadPart);
 
 			//ept::pageEntry.pte = pte;
 			//目标页首地址
@@ -51,12 +50,9 @@ namespace vmm
 			// 配置页表数据
 			HookedPage* targetPageEntry = (HookedPage*)Util::alloc(sizeof(HookedPage));
 			//targetPageEntry->hookedPageAddress = (ULONG_PTR)t_NtLoadDriver;
-			targetPageEntry->hookedPageAddress = (ULONG_PTR)PAGE_ALIGN(t_NtLoadDriver);
+			targetPageEntry->originalPageAddress = (ULONG_PTR)PAGE_ALIGN(t_NtLoadDriver);
 			targetPageEntry->pte = pte;
 			targetPageEntry->shadowPageAddress = (ULONG_PTR)shadowPageAddress;
-			targetPageEntry->readPage = targetPageEntry->shadowPageAddress;
-			targetPageEntry->writePage = targetPageEntry->shadowPageAddress;
-			targetPageEntry->executePage = targetPageEntry->hookedPageAddress;
 
 			// 插入数据到链表
 			InsertHeadList(&ept::eptState.hookedPage.listEntry, &targetPageEntry->listEntry);

@@ -15,6 +15,19 @@ namespace vmm
 {
 	namespace ept
 	{
+		enum EptAccess
+		{
+			All = 0b111,
+			Read = 0b001,
+			Write = 0b010,
+			Execute = 0b100
+		};
+		enum PageState
+		{
+			OriginalPage,
+			ShadowPage
+		};
+
 		union PteEntry
 		{
 			ULONG64 all;
@@ -46,19 +59,35 @@ namespace vmm
 		struct HookedPage
 		{
 			LIST_ENTRY listEntry;             // 指向下一个PageEntry
-			ULONG_PTR hookedPageAddress;  // 目标页首地址
+			ULONG_PTR originalPageAddress;  // 目标页首地址
 			ULONG_PTR shadowPageAddress; // 假页页首地址
 			PteEntry* pte;                   // 目标页所对应的pte
 
-			ULONG_PTR readPage;
-			ULONG_PTR writePage;
-			ULONG_PTR executePage;
+			PageState pageState;        // 当前pte所指向的页的状态
+			
 		};
+
 		struct EptState
 		{
 			EptPointer eptp;
 			PteEntry* pml4t;
 			HookedPage hookedPage;
+		};
+
+		union Pml4Entry
+		{
+			ULONG64 all;
+			struct
+			{
+				ULONG64 readAccess : 1;       //!< [0]
+				ULONG64 writeAccess : 1;      //!< [1]
+				ULONG64 executeAccess : 1;    //!< [2]
+				ULONG64 reserved1 : 5;       //!< [3:7]
+				ULONG64 accessFlag : 1;         //!< [8]
+				ULONG64 ignored : 3;  //!< [9:11]
+				ULONG64 physAddr : 40;  //   [12:51]
+				ULONG64 reserved2 : 12;       //!< [52:63]
+			}fields;
 		};
 		/**
 		 * 开启Ept
@@ -103,10 +132,10 @@ namespace vmm
 		/**
 		 * 设置页访问权限
 		 * @param ULONG_PTR pageAddress:
-		 * @param EptAccess access:
+		 * @param ULONG access:
 		 * @return NTSTATUS:
 		 */
-		NTSTATUS setPageAccess(ULONG_PTR pageAddress, EptAccess access);
+		NTSTATUS setPageAccess(ULONG_PTR pageAddress, ULONG access);
 
 		/**
 		 * 使逻辑处理器与所有 EPTP 关联的映射失效

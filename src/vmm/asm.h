@@ -6,10 +6,9 @@ EXTERN_C_BEGIN
 
 enum VmcallReason
 {
-	Exit = 54886475,
-	kHookNtLoadDriver,
-	kVmcallLstarHookEnable,
-	kVmcallLstarHookDisable,
+	EXIT = 54886475,
+	HOOK_NT_LOAD_DRIVER,
+	INVEPT,
 };
 
 enum  InveptType
@@ -76,6 +75,12 @@ ULONG_PTR __stdcall __load_access_rights_byte(_In_ ULONG_PTR segmentSelector);
 void __invept(InveptType type, void* descriptors);
 
 
-
+/**
+ * 汇编指令的长度
+ * @param const void * lpData: 指令地址
+ * @param unsigned int size: 架构（64 or 32）
+ * @return size_t __fastcall: 长度
+ */
+ size_t __fastcall LDE(const void* lpData, unsigned int size);
 
 EXTERN_C_END

@@ -1,19 +1,22 @@
 #pragma once
 #include <Native.h>
 #include "Common.h"
+#include "Ept.h"
 
 
 namespace vmm
 {
 	namespace vmx
 	{
+		using ept::EptAccess;
 
 		enum VmxState
 		{
-			Off,           // No virtualization
-			Transition,    // Virtualized, context not yet restored
-			On,            // Virtualized, running guest
+			OFF,           // No virtualization
+			TRANSITION,    // Virtualized, context not yet restored
+			ON,            // Virtualized, running guest
 		};
+
 
 		struct Vcpu
 		{
@@ -26,12 +29,15 @@ namespace vmm
 			BOOLEAN isVmxEnable;
 
 			// 导致ept violation 的指令所在的页
-			ULONG_PTR eptViolationRipPage;
-			EptAccess oldEptViolationRipPageAccess;
+			//ULONG_PTR eptViolationRipPage;
+			//EptAccess oldEptViolationRipPageAccess;
 
 			// 权限不够而引发ept violation 的页
 			ULONG_PTR eptViolationPage;
-			EptAccess oldEptViolationPageAccess;
+
+			bool eptViolationPageReadAccess;
+			bool eptViolationPageWriteAccess;
+			bool eptViolationPageExecuteAccess;
 		};
 
 		NTSTATUS initialize();
